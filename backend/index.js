@@ -16,11 +16,8 @@ db.serialize(() => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
-app.get('/', (req, res) => res.send("welcome hello warudo"));
+app.use(express.urlencoded({ extended: true }));
 
-// TODO: 把login写了，一个user对应一个uuid
-// TODO: upload的时候对应一个文件夹（名字是uuid），文件夹里两个文件夹，一个upload一个transcode，是所有video
-// TODO: video名字一个原名字一个加transcoded
 app.post('/register', (req, res) => {
     const {username, password} = req.body;
 
@@ -79,26 +76,30 @@ function transcodeVideo(inputPath, outputPath, resolution) {
 
 // Set up storage engine
 const storage = multer.diskStorage({
-     destination: function  (req, file, cb) {
+    destination: function (req, file, cb) {
         const username = req.query.username;
         if (!username) {
             return cb(new Error('Username is required in query parameters'));
         }
 
-        const userUploadPath = path.join(__dirname, username);
+        // Generate a UUID for the session
+        const sessionUUID = randomUUID();
+        const userUploadPath = path.join(__dirname, username, sessionUUID);
 
         // Synchronously check if directory exists, and create it if it doesn't
         try {
             if (!fs.existsSync(userUploadPath)) {
                 fs.mkdirSync(userUploadPath, { recursive: true });
             }
+            // Save the sessionUUID to req for later use
+            req.sessionUUID = sessionUUID;
             cb(null, userUploadPath);
         } catch (err) {
             cb(err);
         }
     },
-    filename: function(req, file, cb) {
-        cb(null,  randomUUID() + " - " +file.originalname);
+    filename: function (req, file, cb) {
+        cb(null, file.originalname);
     }
 });
 
@@ -137,13 +138,20 @@ app.post('/upload', (req, res) => {
             if (req.file === undefined) {
                 res.status(400).send({msg: 'No file selected!'});
             } else {
-
                 const inputPath = path.join(req.file.path);
-                console.log("1234 " + inputPath);
                 const outputPaths = [
-                    {path: path.join(__dirname, req.query.username, `720p-${req.file.filename}`), resolution: '1280x720'},
-                    {path: path.join(__dirname, req.query.username, `480p-${req.file.filename}`), resolution: '854x480'},
-                    {path: path.join(__dirname, req.query.username, `360p-${req.file.filename}`), resolution: '640x360'},
+                    {
+                        path: path.join(__dirname, req.query.username, req.sessionUUID, `720p-${req.file.filename}`),
+                        resolution: '1280x720'
+                    },
+                    {
+                        path: path.join(__dirname, req.query.username, req.sessionUUID, `480p-${req.file.filename}`),
+                        resolution: '854x480'
+                    },
+                    {
+                        path: path.join(__dirname, req.query.username, req.sessionUUID, `360p-${req.file.filename}`),
+                        resolution: '640x360'
+                    },
                 ];
 
                 try {
@@ -158,6 +166,94 @@ app.post('/upload', (req, res) => {
             }
         }
     });
+});
+
+
+// Middleware to authenticate user using query parameters
+function authenticateUser(req, res, next) {
+    const { username, password } = req.query;
+
+    if (!username || !password) {
+        return res.status(400).json({ message: 'Username and password are required' });
+    }
+
+    db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password], (err, row) => {
+        if (err) {
+            return res.status(500).json({ message: 'Database error' });
+        } else if (row) {
+            req.username = username;
+            next();
+        } else {
+            res.status(401).json({ message: 'Invalid username or password' });
+        }
+    });
+}
+
+// Serve directory listing with download links and folder navigation
+app.get('/browse/:username*?', authenticateUser, (req, res) => {
+    // Ensure the path is properly handled
+    const subPath = req.params[0] || ''; // Handle the case where there is no subpath
+    // console.log(req.params.username);console.log(req.query.username);
+    if (req.params.username !== req.query.username) {
+        res.status(401).json({ message: 'Usernames not matched' });
+    } else {
+        const userDirectory = path.join(__dirname, req.params.username, subPath);
+        // Check if the directory exists
+        if (fs.existsSync(userDirectory)) {
+            fs.readdir(userDirectory, { withFileTypes: true }, (err, items) => {
+                if (err) {
+                    return res.status(500).json({ message: 'Unable to read directory' });
+                }
+
+                // Create an HTML page with links to download each file or navigate into each folder
+                let fileLinks = items.map(item => {
+                    const itemPath = path.join(subPath, item.name);
+                    if (item.isDirectory()) {
+                        // Folder: provide link to navigate into the folder
+                        const folderUrlJoined =  path.join('/browse', req.params.username, itemPath+ '?username='+ req.query.username +'&password='+req.query.password);
+                        return `<li><a href="${folderUrlJoined}">${item.name}/</a></li>`;
+                    } else {
+                        // File: provide link to download the file
+                        const fileUrlJoined = path.join('/download', req.params.username, itemPath+ '?username='+ req.query.username +'&password='+req.query.password);
+                        return `<li><a href="${fileUrlJoined}" download="${item.name}">${item.name}</a></li>`;
+                    }
+                }).join('');
+
+                const html = `
+                <html>
+                <head>
+                    <title>File List</title>
+                </head>
+                <body>
+                    <h1>Files in ${path.join(req.params.username, subPath)} Directory</h1>
+                    <ul>${fileLinks}</ul>
+                </body>
+                </html>
+            `;
+
+                res.send(html);
+            });
+        } else {
+            res.status(404).json({ message: 'User directory not found' });
+        }
+    }
+});
+
+// Serve files for download
+app.get('/download/:username*', authenticateUser, (req, res) => {
+    const subPath = req.params[0] || '';
+    const filePath = path.join(__dirname, req.params.username, subPath);
+
+    // Serve the file for download
+    if (fs.existsSync(filePath) && fs.lstatSync(filePath).isFile()) {
+        res.download(filePath, path.basename(filePath), (err) => {
+            if (err) {
+                res.status(500).json({ message: 'Error downloading the file' });
+            }
+        });
+    } else {
+        res.status(404).json({ message: 'File not found' });
+    }
 });
 
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
