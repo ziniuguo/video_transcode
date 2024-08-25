@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 const fs = require('fs');
 const express = require("express");
+const cors = require('cors');
 const session = require('express-session');
 const multer = require("multer");
 const path = require("path");
@@ -16,6 +17,7 @@ db.serialize(() => {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
