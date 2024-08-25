@@ -10,12 +10,8 @@
     <title>Signin Template · Bootstrap v5.3</title>
 
     <link rel="canonical" href="https://getbootstrap.com/docs/5.3/examples/sign-in/">
-
-    
-
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@docsearch/css@3">
-
-<link href="assets/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <style>
       .bd-placeholder-img {
@@ -95,9 +91,6 @@
         display: block !important;
       }
     </style>
-
-    
-    <!-- Custom styles for this template -->
     <link href="sign-in.css" rel="stylesheet">
   </head>
   <body class="d-flex align-items-center py-4 bg-body-tertiary">
@@ -154,14 +147,15 @@
 
     
 <main class="form-signin w-100 m-auto">
-  <form>
+  <form id="loginForm">
     <img class="mb-4" src="assets/brand/e76568e7ed7e2b2c1f8d5024208664f842946887.jpg" alt="" width="72" height="57">
     <h1 class="h3 mb-3 fw-normal">Please sign in</h1>
 
     <div class="form-floating">
-      <input type="email" class="form-control" id="floatingInput" placeholder="name@example.com">
-      <label for="floatingInput">Email address</label>
+      <input type="text" class="form-control" id="floatingUsername" placeholder="Username" required>
+      <label for="floatingUsername">Username</label>
     </div>
+        
     <div class="form-floating">
       <input type="password" class="form-control" id="floatingPassword" placeholder="Password">
       <label for="floatingPassword">Password</label>
@@ -173,11 +167,71 @@
         Remember me
       </label>
     </div>
-    <button class="btn btn-primary w-100 py-2" type="submit">Sign in</button>
+
+    <div class="d-flex justify-content-between">
+      <button class="btn btn-primary w-50 py-2" type="submit">Sign in</button>
+      <button class="btn btn-secondary w-50 py-2 ms-2" type="button" id="registerBtn">Register</button>
+    </div>
+    
     <p class="mt-5 mb-3 text-body-secondary">&copy; 2017–2024</p>
   </form>
 </main>
-<script src="assets/dist/js/bootstrap.bundle.min.js"></script>
 
-    </body>
+<script src="assets/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('loginForm').addEventListener('submit', function(event) {
+    event.preventDefault(); // 阻止表单的默认提交行为
+
+    const username = document.getElementById('floatingUsername').value;
+    const password = document.getElementById('floatingPassword').value;
+
+    fetch('http://localhost:3000/login', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: username, password: password }),
+    })
+    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(({ status, body }) => {
+        if (status === 200) {
+            alert('Login successful!'); // 登录成功提示
+            // 可以在这里添加页面跳转或其他成功登录后的操作
+          } else {
+            alert('Login failed: ' + body.message);
+        }
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        alert('An unexpected error occurred: ' + error.message);
+    });
+});
+
+  document.getElementById('registerBtn').addEventListener('click', function() {
+    const username = document.getElementById('floatingUsername').value;
+    const password = document.getElementById('floatingPassword').value;
+
+    fetch('http://localhost:3000/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username: username, password: password }),
+    })
+    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(({ status, body }) => {
+        if (status === 201) {
+            alert('Registration successful!');
+        } else {
+            alert('Registration failed: ' + body.message);
+        }
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        alert('An unexpected error occurred: ' + error.message);
+    });
+});
+</script>
+
+</body>
 </html>
