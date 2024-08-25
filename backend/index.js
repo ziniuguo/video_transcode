@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 const fs = require('fs');
 const express = require("express");
+const session = require('express-session');
 const multer = require("multer");
 const path = require("path");
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
@@ -17,6 +18,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(session({
+    secret: 'your_secret_key', // 用于签名 session ID 的密钥
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 10 * 60 * 1000 // 设置 session 过期时间为 10 分钟
+    }
+}));
 
 app.post('/register', (req, res) => {
     const {username, password} = req.body;
@@ -48,6 +58,7 @@ app.post('/login', (req, res) => {
         if (err) {
             res.status(500).json({message: 'Database error'});
         } else if (row) {
+            req.session.user = { username: row.username };
             res.json({message: 'Login successful'});
         } else {
             res.status(401).json({message: 'Login failed'});
@@ -55,6 +66,15 @@ app.post('/login', (req, res) => {
     });
 });
 
+// 登出 API
+app.post('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).send('Logout failed');
+        }
+        res.send('Logout successful');
+    });
+});
 
 function transcodeVideo(inputPath, outputPath, resolution) {
     return new Promise((resolve, reject) => {
@@ -77,11 +97,7 @@ function transcodeVideo(inputPath, outputPath, resolution) {
 // Set up storage engine
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const username = req.query.username;
-        if (!username) {
-            return cb(new Error('Username is required in query parameters'));
-        }
-
+        const username = req.session.user.username;
         // Generate a UUID for the session
         const sessionUUID = randomUUID();
         const userUploadPath = path.join(__dirname, username, sessionUUID);
@@ -106,7 +122,7 @@ const storage = multer.diskStorage({
 // Init upload
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 100000000 }, // Limit file size to 100MB
+    limits: { fileSize: 1073741824  }, // Limit file size to
     fileFilter: function(req, file, cb) {
         checkFileType(file, cb);
     }
@@ -128,73 +144,61 @@ function checkFileType(file, cb) {
     }
 }
 
+// 中间件：检查用户是否登录
+function ensureAuthenticated(req, res, next) {
+    if (req.session.user) {
+        next(); // 用户已登录，继续处理请求
+    } else {
+        res.status(401).json({ message: 'Please login to access this page' });
+    }
+}
+
+
 // Set up the POST route to handle file uploads
-app.post('/upload', (req, res) => {
-    console.log(req.query.username)
+app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
-            res.status(400).send({msg: err});
-        } else {
-            if (req.file === undefined) {
-                res.status(400).send({msg: 'No file selected!'});
-            } else {
-                const inputPath = path.join(req.file.path);
-                const outputPaths = [
-                    {
-                        path: path.join(__dirname, req.query.username, req.sessionUUID, `720p-${req.file.filename}`),
-                        resolution: '1280x720'
-                    },
-                    {
-                        path: path.join(__dirname, req.query.username, req.sessionUUID, `480p-${req.file.filename}`),
-                        resolution: '854x480'
-                    },
-                    {
-                        path: path.join(__dirname, req.query.username, req.sessionUUID, `360p-${req.file.filename}`),
-                        resolution: '640x360'
-                    },
-                ];
+            return res.status(400).send({ msg: err });
+        }
+        if (req.file === undefined) {
+            return res.status(400).send({ msg: 'No file selected!' });
+        }
+        // 使用已登录用户的用户名作为路径的一部分
+        const username = req.session.user.username;
+        const inputPath = path.join(req.file.path);
+        const outputPaths = [
+            {
+                path: path.join(__dirname, username, req.sessionUUID, `720p-${req.file.filename}`),
+                resolution: '1280x720'
+            },
+            {
+                path: path.join(__dirname, username, req.sessionUUID, `480p-${req.file.filename}`),
+                resolution: '854x480'
+            },
+            {
+                path: path.join(__dirname, username, req.sessionUUID, `360p-${req.file.filename}`),
+                resolution: '640x360'
+            },
+        ];
 
-                try {
-                    await Promise.all(outputPaths.map(output => transcodeVideo(inputPath, output.path, output.resolution)));
-                    res.status(200).send({
-                        msg: 'File uploaded and transcoded!',
-                        files: outputPaths.map(output => output.path)
-                    });
-                } catch (transcodeError) {
-                    res.status(500).send({msg: 'Error transcoding video', error: transcodeError.message});
-                }
-            }
+        try {
+            // 执行视频转码
+            await Promise.all(outputPaths.map(output => transcodeVideo(inputPath, output.path, output.resolution)));
+            res.status(200).send({
+                msg: 'File uploaded and transcoded!',
+                files: outputPaths.map(output => output.path)
+            });
+        } catch (transcodeError) {
+            res.status(500).send({ msg: 'Error transcoding video', error: transcodeError.message });
         }
     });
 });
 
-
-// Middleware to authenticate user using query parameters
-function authenticateUser(req, res, next) {
-    const { username, password } = req.query;
-
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password are required' });
-    }
-
-    db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password], (err, row) => {
-        if (err) {
-            return res.status(500).json({ message: 'Database error' });
-        } else if (row) {
-            req.username = username;
-            next();
-        } else {
-            res.status(401).json({ message: 'Invalid username or password' });
-        }
-    });
-}
-
 // Serve directory listing with download links and folder navigation
-app.get('/browse/:username*?', authenticateUser, (req, res) => {
+app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
     // Ensure the path is properly handled
     const subPath = req.params[0] || ''; // Handle the case where there is no subpath
-    // console.log(req.params.username);console.log(req.query.username);
-    if (req.params.username !== req.query.username) {
+    if (req.params.username !== req.session.user.username) {
         res.status(401).json({ message: 'Usernames not matched' });
     } else {
         const userDirectory = path.join(__dirname, req.params.username, subPath);
@@ -210,11 +214,11 @@ app.get('/browse/:username*?', authenticateUser, (req, res) => {
                     const itemPath = path.join(subPath, item.name);
                     if (item.isDirectory()) {
                         // Folder: provide link to navigate into the folder
-                        const folderUrlJoined =  path.join('/browse', req.params.username, itemPath+ '?username='+ req.query.username +'&password='+req.query.password);
+                        const folderUrlJoined =  path.join('/browse', req.params.username, itemPath);
                         return `<li><a href="${folderUrlJoined}">${item.name}/</a></li>`;
                     } else {
                         // File: provide link to download the file
-                        const fileUrlJoined = path.join('/download', req.params.username, itemPath+ '?username='+ req.query.username +'&password='+req.query.password);
+                        const fileUrlJoined = path.join('/download', req.params.username, itemPath);
                         return `<li><a href="${fileUrlJoined}" download="${item.name}">${item.name}</a></li>`;
                     }
                 }).join('');
@@ -240,10 +244,13 @@ app.get('/browse/:username*?', authenticateUser, (req, res) => {
 });
 
 // Serve files for download
-app.get('/download/:username*', authenticateUser, (req, res) => {
+app.get('/download/:username*', ensureAuthenticated, (req, res) => {
     const subPath = req.params[0] || '';
+    // 检查请求的用户名是否和登录的用户名匹配
+    if (req.params.username !== req.session.user.username) {
+        return res.status(401).json({ message: 'Usernames do not match' });
+    }
     const filePath = path.join(__dirname, req.params.username, subPath);
-
     // Serve the file for download
     if (fs.existsSync(filePath) && fs.lstatSync(filePath).isFile()) {
         res.download(filePath, path.basename(filePath), (err) => {
@@ -257,4 +264,3 @@ app.get('/download/:username*', authenticateUser, (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
-//test git proxy
