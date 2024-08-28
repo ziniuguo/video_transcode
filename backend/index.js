@@ -79,7 +79,6 @@ app.post('/logout', (req, res) => {
     });
 });
 
-// 添加一个新的路由来获取用户信息
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     if (req.session.user) {
         res.json({ username: req.session.user.username });
@@ -109,21 +108,21 @@ function transcodeVideo(inputPath, outputPath, resolution) {
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const username = req.session.user.username;
-        const sessionUUID = randomUUID();
-        const userUploadPath = path.join(__dirname, 'uploads', username, sessionUUID);
+        const originalFileName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const userUploadPath = path.join(__dirname, 'uploads', username, originalFileName);
 
         try {
             if (!fs.existsSync(userUploadPath)) {
                 fs.mkdirSync(userUploadPath, { recursive: true });
             }
-            req.sessionUUID = sessionUUID;
+            req.sessionUUID = originalFileName;
             cb(null, userUploadPath);
         } catch (err) {
             cb(err);
         }
     },
     filename: function (req, file, cb) {
-        cb(null, file.originalname); // 保存原始文件名
+        cb(null, file.originalname);
     }
 });
 
@@ -210,15 +209,18 @@ app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
                 let fileLinks = items.map(item => {
                     const itemPath = path.join(subPath, item.name);
                     if (item.isDirectory()) {
-                        const folderUrlJoined =  path.join('/browse', req.params.username, itemPath);
-                        return `<li><a href="${folderUrlJoined}">${item.name}/</a></li>`;
+                        const folderUrlJoined = path.join('/browse', req.params.username, itemPath);
+                        return `<li>
+                            <a href="${folderUrlJoined}">${item.name}/</a>
+                            <button onclick="deleteFolder('${folderUrlJoined}')">Delete Folder</button>
+                        </li>`;
                     } else {
                         const fileUrlJoined = path.join('/download', req.params.username, itemPath);
-                        const deleteUrl = path.join('/delete', req.params.username, itemPath);
+                        const deleteUrl = `/delete/${encodeURIComponent(req.params.username)}/${encodeURIComponent(itemPath)}`;
                         return `<li>
-                                    <a href="${fileUrlJoined}" download="${item.name}">${item.name}</a> 
-                                    <button onclick="deleteFile('${deleteUrl}')">Delete</button>
-                                </li>`;
+                            <a href="${fileUrlJoined}" download="${item.name}">${item.name}</a> 
+                            <button onclick="deleteFile('${deleteUrl}')">Delete File</button>
+                        </li>`;
                     }
                 }).join('');
 
@@ -228,6 +230,16 @@ app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
                     <title>File List</title>
                     <script>
                         function deleteFile(url) {
+                            fetch(url, { method: 'DELETE' })
+                                .then(response => response.json())
+                                .then(data => {
+                                    alert(data.message);
+                                    window.location.reload();
+                                })
+                                .catch(error => console.error('Error:', error));
+                        }
+
+                        function deleteFolder(url) {
                             fetch(url, { method: 'DELETE' })
                                 .then(response => response.json())
                                 .then(data => {
@@ -253,10 +265,27 @@ app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
     }
 });
 
-app.delete('/delete/:username/*', ensureAuthenticated, (req, res) => {
-    const { username } = req.params;
-    const filename = req.params[0]; // Correctly handle the filename with slashes
-    const filePath = path.join(__dirname, 'uploads', username, filename);
+// 删除指定文件夹
+app.delete('/deleteFolder/:username/:folderName', ensureAuthenticated, (req, res) => {
+    const { username, folderName } = req.params;
+    const userFolderPath = path.join(__dirname, 'uploads', username, folderName);
+
+    if (req.session.user.username !== username) {
+        return res.status(401).json({ message: 'Usernames do not match' });
+    }
+
+    fs.rm(userFolderPath, { recursive: true, force: true }, (err) => {
+        if (err) {
+            return res.status(500).json({ message: 'Failed to delete folder' });
+        }
+        res.json({ message: 'Folder deleted successfully' });
+    });
+});
+
+app.delete('/delete/:username/:filename*', ensureAuthenticated, (req, res) => {
+    const { username, filename } = req.params;
+    const subPath = req.params[0] || '';
+    const filePath = path.join(__dirname, 'uploads', username, filename, subPath);
 
     if (req.session.user.username !== username) {
         return res.status(401).json({ message: 'Usernames do not match' });
@@ -267,6 +296,23 @@ app.delete('/delete/:username/*', ensureAuthenticated, (req, res) => {
             return res.status(500).json({ message: 'Failed to delete file' });
         }
         res.json({ message: 'File deleted successfully' });
+    });
+});
+
+// Route to delete entire folder
+app.delete('/deleteFolder/:username', ensureAuthenticated, (req, res) => {
+    const { username } = req.params;
+    const userFolderPath = path.join(__dirname, 'uploads', username);
+
+    if (req.session.user.username !== username) {
+        return res.status(401).json({ message: 'Usernames do not match' });
+    }
+
+    fs.rm(userFolderPath, { recursive: true, force: true }, (err) => {
+        if (err) {
+            return res.status(500).json({ message: 'Failed to delete folder' });
+        }
+        res.json({ message: 'Folder deleted successfully' });
     });
 });
 
