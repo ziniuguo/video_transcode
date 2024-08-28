@@ -36,19 +36,19 @@ app.get('/', (req, res) => {
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.post('/register', (req, res) => {
-    const {username, password} = req.body;
+    const { username, password } = req.body;
 
     const stmt = db.prepare("INSERT INTO users (username, password) VALUES (?, ?)");
 
     stmt.run(username, password, function (err) {
         if (err) {
             if (err.code === 'SQLITE_CONSTRAINT') {
-                res.status(409).json({message: 'Username already exists'});
+                res.status(409).json({ message: 'Username already exists' });
             } else {
-                res.status(500).json({message: 'Database error'});
+                res.status(500).json({ message: 'Database error' });
             }
         } else {
-            res.status(201).json({message: 'User registered successfully'});
+            res.status(201).json({ message: 'User registered successfully' });
         }
     });
 
@@ -56,16 +56,16 @@ app.post('/register', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-    const {username, password} = req.body;
+    const { username, password } = req.body;
 
     db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password], (err, row) => {
         if (err) {
-            res.status(500).json({message: 'Database error'});
+            res.status(500).json({ message: 'Database error' });
         } else if (row) {
             req.session.user = { username: row.username };
-            res.status(200).json({message: 'Login successful'});
+            res.status(200).json({ message: 'Login successful' });
         } else {
-            res.status(401).json({message: 'Login failed'});
+            res.status(401).json({ message: 'Login failed' });
         }
     });
 });
@@ -94,7 +94,6 @@ function transcodeVideo(inputPath, outputPath, resolution) {
             .videoCodec('libx264')
             .size(resolution)
             .on('end', () => {
-                console.log(`File has been transcoded to ${resolution}`);
                 resolve();
             })
             .on('error', (err) => {
@@ -128,8 +127,8 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 1073741824  },
-    fileFilter: function(req, file, cb) {
+    limits: { fileSize: 1073741824 },
+    fileFilter: function (req, file, cb) {
         checkFileType(file, cb);
     }
 }).single('video');
@@ -193,7 +192,6 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
     });
 });
 
-
 app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
     const subPath = req.params[0] || '';
     if (req.params.username !== req.session.user.username) {
@@ -209,10 +207,11 @@ app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
                 let fileLinks = items.map(item => {
                     const itemPath = path.join(subPath, item.name);
                     if (item.isDirectory()) {
+                        const folderName = item.name;
                         const folderUrlJoined = path.join('/browse', req.params.username, itemPath);
                         return `<li>
                             <a href="${folderUrlJoined}">${item.name}/</a>
-                            <button onclick="deleteFolder('${folderUrlJoined}')">Delete Folder</button>
+                            <button onclick="deleteFolder('${folderName}')">Delete Folder</button>
                         </li>`;
                     } else {
                         const fileUrlJoined = path.join('/download', req.params.username, itemPath);

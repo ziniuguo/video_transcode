@@ -21,7 +21,7 @@
     <div id="fileLinks" class="mt-4"></div>
     <button type="button" class="btn btn-danger mt-3" id="deleteFolderButton">Delete All Folders</button>
 
-    <!-- 登出按钮放在最下面 -->
+<!--     登出按钮 -->
     <button type="button" class="btn btn-warning mt-3" id="logoutButton">Logout</button>
 </div>
 
@@ -114,7 +114,9 @@
             return;
         }
 
-        fetch(`http://localhost:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`, {
+        const deleteUrl = `http://localhost:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`;
+
+        fetch(deleteUrl, {
             method: 'DELETE',
             credentials: 'include'
         })
@@ -135,7 +137,9 @@
             return;
         }
 
-        fetch('http://localhost:3000/deleteFolder/' + encodeURIComponent(sessionUsername), {
+        const deleteAllUrl = 'http://localhost:3000/deleteFolder/' + encodeURIComponent(sessionUsername);
+
+        fetch(deleteAllUrl, {
             method: 'DELETE',
             credentials: 'include'
         })
@@ -171,6 +175,17 @@
                 alert('An error occurred while logging out: ' + error.message);
             });
     });
+
+    // 动态删除按钮的生成
+    function createDeleteButton(folderPath) {
+        const button = document.createElement('button');
+        button.textContent = 'Delete Folder';
+        button.className = 'btn btn-danger';
+        button.onclick = function () {
+            deleteFolder(folderPath);
+        };
+        return button;
+    }
 </script>
 </body>
 </html>
