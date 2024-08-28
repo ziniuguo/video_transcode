@@ -1,56 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="assets/js/color-modes.js"></script>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
-    <meta name="generator" content="Hugo 0.122.0">
-    <title>File Upload · Bootstrap v5.3</title>
-    <link rel="canonical" href="https://getbootstrap.com/docs/5.3/examples/buttons/">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@docsearch/css@3">
-    <link href="assets/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .bd-placeholder-img {
-            font-size: 1.125rem;
-            text-anchor: middle;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            user-select: none;
-        }
-        @media (min-width: 768px) {
-            .bd-placeholder-img-lg {
-                font-size: 3.5rem;
-            }
-        }
-        .b-example-divider {
-            width: 100%;
-            height: 3rem;
-            background-color: rgba(0, 0, 0, .1);
-            border: solid rgba(0, 0, 0, .15);
-            border-width: 1px 0;
-            box-shadow: inset 0 .5em 1.5em rgba(0, 0, 0, .1), inset 0 .125em .5em rgba(0, 0, 0, .15);
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+    <link href="/assets/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
 <div class="container mt-5">
     <h2>File Upload</h2>
-    <!-- 文件上传表单 -->
     <form id="uploadForm">
         <div class="mb-3">
             <label for="fileInput" class="form-label">Choose a video file</label>
-            <input class="form-control" type="file" id="fileInput" name="video" accept="video/*" required>
+            <input type="file" id="fileInput" name="video" class="form-control" accept="video/*">
         </div>
-        <button class="btn btn-primary" type="button" id="uploadButton">Upload</button>
+        <button type="button" class="btn btn-primary" id="uploadButton">Upload</button>
     </form>
+
     <div id="uploadStatus" class="mt-3"></div>
+    <div id="fileLinks" class="mt-4"></div>
 </div>
 
+<script src="/assets/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // JavaScript 事件监听器来处理文件上传
-    document.getElementById('uploadButton').addEventListener('click', function() {
+    let sessionUsername = '';
+
+    // 获取当前登录的用户名
+    function getSessionUsername() {
+        fetch('http://localhost:3000/getUserInfo', {
+            credentials: 'include'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch user info');
+                }
+                return response.json();
+            })
+            .then(data => {
+                sessionUsername = data.username;
+                loadFileList();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('uploadStatus').innerText = 'An error occurred while fetching user info: ' + error.message;
+            });
+    }
+
+    document.getElementById('uploadButton').addEventListener('click', function () {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
 
@@ -62,22 +58,53 @@
         const formData = new FormData();
         formData.append('video', file);
 
-        fetch('/upload', {
+        document.getElementById('uploadStatus').innerText = 'Uploading...';
+
+        fetch('http://localhost:3000/upload', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'include'
         })
-            .then(response => response.json())
-            .then(data => {
-                if (data.msg) {
-                    document.getElementById('uploadStatus').innerText = data.msg;
-                } else {
-                    document.getElementById('uploadStatus').innerText = 'Unexpected response format.';
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
                 }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('uploadStatus').innerText = data.msg;
+                loadFileList();
             })
             .catch(error => {
                 console.error('Error:', error);
-                document.getElementById('uploadStatus').innerText = 'An error occurred during file upload.';
+                document.getElementById('uploadStatus').innerText = 'An error occurred during file upload: ' + error.message;
             });
+    });
+
+    // 加载文件列表
+    function loadFileList() {
+        if (!sessionUsername) {
+            console.error('No session username found');
+            document.getElementById('fileLinks').innerText = 'Cannot load file list without username.';
+            return;
+        }
+
+        fetch('http://localhost:3000/browse/' + encodeURIComponent(sessionUsername), {
+            credentials: 'include'
+        })
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('fileLinks').innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('fileLinks').innerText = 'An error occurred while fetching file list: ' + error.message;
+            });
+    }
+
+    // 页面加载时获取用户名和文件列表
+    document.addEventListener('DOMContentLoaded', function() {
+        getSessionUsername();
     });
 </script>
 </body>
