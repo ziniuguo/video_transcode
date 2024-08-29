@@ -30,11 +30,12 @@ app.use(session({
     }
 }));
 
+app.use(express.static(path.join(__dirname, '../frontend')));
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
-app.use(express.static(path.join(__dirname, '../frontend')));
 
+// 注册路由
 app.post('/register', (req, res) => {
     const { username, password } = req.body;
 
@@ -48,6 +49,15 @@ app.post('/register', (req, res) => {
                 res.status(500).json({ message: 'Database error' });
             }
         } else {
+            // 用户注册成功，创建以用户名命名的文件夹
+            const userFolderPath = path.join(__dirname, 'uploads', username);
+
+            // 检查文件夹是否存在，不存在则创建
+            if (!fs.existsSync(userFolderPath)) {
+                fs.mkdirSync(userFolderPath, { recursive: true });
+                console.log(`Created directory for user: ${username}`);
+            }
+
             res.status(201).json({ message: 'User registered successfully' });
         }
     });
@@ -277,10 +287,12 @@ app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
 });
 
 // 删除指定文件夹
-app.delete('/deleteFolder/:username/:folderName', ensureAuthenticated, (req, res) => {
-    const { username, folderName } = req.params;
-    const userFolderPath = path.join(__dirname, 'uploads', username, folderName);
+// 修改后的删除特定用户子目录的路由
+app.delete('/deleteFolder/:username/:subFolderName', ensureAuthenticated, (req, res) => {
+    const { username, subFolderName } = req.params;
+    const userFolderPath = path.join(__dirname, 'uploads', username, subFolderName);
 
+    // 确保用户名匹配
     if (req.session.user.username !== username) {
         return res.status(401).json({ message: 'Usernames do not match' });
     }

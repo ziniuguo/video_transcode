@@ -208,7 +208,7 @@
             return;
         }
 
-        const deleteAllUrl = 'http://localhost:3000/deleteFolder/' + encodeURIComponent(sessionUsername);
+        const deleteAllUrl = `http://localhost:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/your_subfolder_name`;
 
         fetch(deleteAllUrl, {
             method: 'DELETE',
