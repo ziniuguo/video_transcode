@@ -339,4 +339,25 @@ app.delete('/deleteFolder/:username', ensureAuthenticated, (req, res) => {
     });
 });
 
+// Serve files for download
+app.get('/download/:username*', ensureAuthenticated, (req, res) => {
+    const subPath = req.params[0] || '';
+    // 检查请求的用户名是否和登录的用户名匹配
+    if (req.params.username !== req.session.user.username) {
+        return res.status(401).json({ message: 'Usernames do not match' });
+    }
+    const filePath = path.join(__dirname, '/uploads/',req.params.username, subPath);
+    // Serve the file for download
+    if (fs.existsSync(filePath) && fs.lstatSync(filePath).isFile()) {
+        res.download(filePath, path.basename(filePath), (err) => {
+            if (err) {
+                res.status(500).json({ message: 'Error downloading the file' });
+            }
+        });
+    } else {
+        res.status(404).json({ message: 'File not found' });
+    }
+});
+
+
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
