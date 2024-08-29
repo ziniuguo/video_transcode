@@ -87,13 +87,20 @@ app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     }
 });
 
+// 用于存储转码进度
+let transcodeProgress = 0;
+
 function transcodeVideo(inputPath, outputPath, resolution) {
     return new Promise((resolve, reject) => {
         ffmpeg(inputPath)
             .output(outputPath)
             .videoCodec('libx264')
             .size(resolution)
+            .on('progress', (progress) => {
+                transcodeProgress = progress.percent || 0; // 更新转码进度
+            })
             .on('end', () => {
+                transcodeProgress = 100; // 转码完成
                 resolve();
             })
             .on('error', (err) => {
@@ -190,6 +197,11 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
             res.status(500).send({ msg: 'Error transcoding video', error: transcodeError.message });
         }
     });
+});
+
+// 新的路由来返回转码进度
+app.get('/transcodeProgress', ensureAuthenticated, (req, res) => {
+    res.json({ progress: transcodeProgress });
 });
 
 app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
