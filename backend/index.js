@@ -11,6 +11,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('database.db');
 
+// Create users table if it doesn't exist
 db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)");
 });
@@ -21,24 +22,27 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Set up session management
 app.use(session({
     secret: 'your_secret_key',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        maxAge: 10 * 60 * 1000
+        maxAge: 10 * 60 * 1000 // 10 minutes
     }
 }));
 
-app.use(express.static(path.join(__dirname, '../frontend')));
+// Set static file path correctly
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
+
+// Serve index.html as the root path
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+    res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
 
-// 注册路由
+// Registration route
 app.post('/register', (req, res) => {
     const { username, password } = req.body;
-
     const stmt = db.prepare("INSERT INTO users (username, password) VALUES (?, ?)");
 
     stmt.run(username, password, function (err) {
@@ -49,15 +53,13 @@ app.post('/register', (req, res) => {
                 res.status(500).json({ message: 'Database error' });
             }
         } else {
-            // 用户注册成功，创建以用户名命名的文件夹
+            // Create a folder for the user upon successful registration
             const userFolderPath = path.join(__dirname, 'uploads', username);
-
-            // 检查文件夹是否存在，不存在则创建
+            // Check if the folder exists; if not, create it
             if (!fs.existsSync(userFolderPath)) {
                 fs.mkdirSync(userFolderPath, { recursive: true });
                 console.log(`Created directory for user: ${username}`);
             }
-
             res.status(201).json({ message: 'User registered successfully' });
         }
     });
@@ -65,6 +67,7 @@ app.post('/register', (req, res) => {
     stmt.finalize();
 });
 
+// Login route
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
 
@@ -80,6 +83,7 @@ app.post('/login', (req, res) => {
     });
 });
 
+// Logout route
 app.post('/logout', (req, res) => {
     req.session.destroy(err => {
         if (err) {
@@ -89,6 +93,7 @@ app.post('/logout', (req, res) => {
     });
 });
 
+// Get user info route
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     if (req.session.user) {
         res.json({ username: req.session.user.username });
@@ -97,9 +102,10 @@ app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     }
 });
 
-// 用于存储转码进度
-let transcodeProgress = 0;
+// Variable to store progress
+let currentProgress = 0;
 
+// Function to transcode video and update `currentProgress`
 function transcodeVideo(inputPath, outputPath, resolution) {
     return new Promise((resolve, reject) => {
         ffmpeg(inputPath)
@@ -107,10 +113,10 @@ function transcodeVideo(inputPath, outputPath, resolution) {
             .videoCodec('libx264')
             .size(resolution)
             .on('progress', (progress) => {
-                transcodeProgress = progress.percent || 0; // 更新转码进度
+                currentProgress = progress.percent; // Update progress here
             })
             .on('end', () => {
-                transcodeProgress = 100; // 转码完成
+                currentProgress = 100; // Transcoding complete
                 resolve();
             })
             .on('error', (err) => {
@@ -121,6 +127,12 @@ function transcodeVideo(inputPath, outputPath, resolution) {
     });
 }
 
+// Route to return current transcoding progress
+app.get('/transcodingProgress', (req, res) => {
+    res.json({ progress: currentProgress });
+});
+
+// Set up storage for multer
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const username = req.session.user.username;
@@ -142,14 +154,16 @@ const storage = multer.diskStorage({
     }
 });
 
+// Multer configuration
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 1073741824 },
+    limits: { fileSize: 1073741824 }, // 1 GB limit
     fileFilter: function (req, file, cb) {
         checkFileType(file, cb);
     }
 }).single('video');
 
+// Function to check file type
 function checkFileType(file, cb) {
     const filetypes = /mp4|mov|avi|mkv/;
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
@@ -162,6 +176,7 @@ function checkFileType(file, cb) {
     }
 }
 
+// Middleware to ensure user is authenticated
 function ensureAuthenticated(req, res, next) {
     if (req.session.user) {
         next();
@@ -170,6 +185,7 @@ function ensureAuthenticated(req, res, next) {
     }
 }
 
+// Upload route with transcoding
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
@@ -209,11 +225,12 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
     });
 });
 
-// 新的路由来返回转码进度
+// New route to return transcoding progress
 app.get('/transcodeProgress', ensureAuthenticated, (req, res) => {
-    res.json({ progress: transcodeProgress });
+    res.json({ progress: currentProgress });
 });
 
+// File browsing route
 app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
     const subPath = req.params[0] || '';
     if (req.params.username !== req.session.user.username) {
@@ -286,13 +303,12 @@ app.get('/browse/:username*?', ensureAuthenticated, (req, res) => {
     }
 });
 
-// 删除指定文件夹
-// 修改后的删除特定用户子目录的路由
+// Delete specific folder route
 app.delete('/deleteFolder/:username/:subFolderName', ensureAuthenticated, (req, res) => {
     const { username, subFolderName } = req.params;
     const userFolderPath = path.join(__dirname, 'uploads', username, subFolderName);
 
-    // 确保用户名匹配
+    // Ensure username matches
     if (req.session.user.username !== username) {
         return res.status(401).json({ message: 'Usernames do not match' });
     }
@@ -305,6 +321,7 @@ app.delete('/deleteFolder/:username/:subFolderName', ensureAuthenticated, (req, 
     });
 });
 
+// Delete specific file route
 app.delete('/delete/:username/:filename*', ensureAuthenticated, (req, res) => {
     const { username, filename } = req.params;
     const subPath = req.params[0] || '';
@@ -342,11 +359,11 @@ app.delete('/deleteFolder/:username', ensureAuthenticated, (req, res) => {
 // Serve files for download
 app.get('/download/:username*', ensureAuthenticated, (req, res) => {
     const subPath = req.params[0] || '';
-    // 检查请求的用户名是否和登录的用户名匹配
+    // Check if the requested username matches the logged-in username
     if (req.params.username !== req.session.user.username) {
         return res.status(401).json({ message: 'Usernames do not match' });
     }
-    const filePath = path.join(__dirname, '/uploads/',req.params.username, subPath);
+    const filePath = path.join(__dirname, '/uploads/', req.params.username, subPath);
     // Serve the file for download
     if (fs.existsSync(filePath) && fs.lstatSync(filePath).isFile()) {
         res.download(filePath, path.basename(filePath), (err) => {
@@ -358,6 +375,5 @@ app.get('/download/:username*', ensureAuthenticated, (req, res) => {
         res.status(404).json({ message: 'File not found' });
     }
 });
-
 
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));

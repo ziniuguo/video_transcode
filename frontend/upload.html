@@ -27,7 +27,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            color: black; /* 设置字体颜色为黑色 */
+            color: black; /* Set font color to black */
             font-weight: bold;
         }
     </style>
@@ -43,7 +43,7 @@
         <button type="button" class="btn btn-primary" id="uploadButton">Upload</button>
     </form>
 
-    <!-- 上传和转码进度条 -->
+    <!-- Upload and transcoding progress bar -->
     <div id="uploadProgressContainer">
         <progress id="uploadProgress" value="0" max="100"></progress>
         <div id="progressLabel">Waiting...</div>
@@ -53,7 +53,7 @@
     <div id="fileLinks" class="mt-4"></div>
     <button type="button" class="btn btn-danger mt-3" id="deleteFolderButton">Delete All Folders</button>
 
-    <!-- 登出按钮 -->
+    <!-- Logout button -->
     <button type="button" class="btn btn-warning mt-3" id="logoutButton">Logout</button>
 </div>
 
@@ -99,10 +99,13 @@
         progressElement.value = 0;
         progressLabel.textContent = 'Uploading...';
 
+        // Create a new XMLHttpRequest instance
         const xhr = new XMLHttpRequest();
+
+        // Make sure to open the request before calling send
         xhr.open('POST', 'http://localhost:3000/upload', true);
 
-        // 上传进度监听器
+        // Upload progress listener
         xhr.upload.onprogress = function (event) {
             if (event.lengthComputable) {
                 const percentComplete = (event.loaded / event.total) * 100;
@@ -114,9 +117,9 @@
         xhr.onload = function () {
             if (xhr.status === 200) {
                 document.getElementById('uploadStatus').innerText = 'Upload complete! Starting transcoding...';
-                progressElement.value = 0;
-                progressLabel.textContent = 'Transcoding...';
-                startTranscodingProgress();  // 开始监听转码进度
+                progressElement.value = 0; // Reset progress bar
+                progressLabel.textContent = 'Transcoding...'; // Update label
+                startTranscodingProgress();  // Start monitoring transcoding progress
             } else {
                 document.getElementById('uploadStatus').innerText = 'Upload failed: ' + xhr.statusText;
                 progressLabel.textContent = 'Error during upload';
@@ -128,22 +131,30 @@
             progressLabel.textContent = 'Upload error';
         };
 
-        xhr.send(formData);
+        // Ensure that send() is called after open() has completed
+        try {
+            xhr.send(formData);
+        } catch (error) {
+            console.error('An error occurred while sending FormData:', error);
+        }
     });
+
 
     function startTranscodingProgress() {
         const progressElement = document.getElementById('uploadProgress');
         const progressLabel = document.getElementById('progressLabel');
+
+        // Request transcoding progress every second
         const intervalId = setInterval(() => {
-            fetch('http://localhost:3000/transcodeProgress', { credentials: 'include' })
+            fetch('http://localhost:3000/transcodingProgress', { credentials: 'include' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.progress >= 100) {
-                        clearInterval(intervalId);
+                        clearInterval(intervalId); // Stop progress checks
                         document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
                         progressElement.value = 100;
                         progressLabel.textContent = 'Transcoding complete!';
-                        loadFileList();
+                        loadFileList(); // Update file list
                     } else {
                         progressElement.value = data.progress;
                         progressLabel.textContent = `Transcoding... ${Math.round(data.progress)}%`;
@@ -152,7 +163,7 @@
                 .catch(error => {
                     console.error('Error:', error);
                 });
-        }, 1000);  // 每秒请求一次进度
+        }, 1000);  // Request progress every second
     }
 
     function loadFileList() {
@@ -194,7 +205,7 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                loadFileList(); // 重新加载文件列表
+                loadFileList(); // Reload the file list
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -217,7 +228,7 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                document.getElementById('fileLinks').innerHTML = ''; // 清空文件列表
+                document.getElementById('fileLinks').innerHTML = ''; // Clear the file list
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -225,7 +236,7 @@
             });
     });
 
-    // 添加登出功能
+    // Logout function
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('http://localhost:3000/logout', {
             method: 'POST',
@@ -239,7 +250,7 @@
             })
             .then(data => {
                 alert('Logged out successfully!');
-                window.location.href = '/'; // 重定向到主页
+                window.location.href = '/'; // Redirect to the homepage
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -247,7 +258,7 @@
             });
     });
 
-    // 动态删除按钮的生成
+    // Create a dynamic delete button
     function createDeleteButton(folderPath) {
         const button = document.createElement('button');
         button.textContent = 'Delete Folder';
