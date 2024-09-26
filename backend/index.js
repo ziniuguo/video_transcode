@@ -79,7 +79,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // 设置会话管理
 app.use(session({
-    secret: 'your_secret_key',
+    secret: process.env.SESSION_SECRET || 'your_secret_key',
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -98,27 +98,31 @@ app.get('/', (req, res) => {
 // 注册路由
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10); // 加密密码
-    const query = "INSERT INTO users (username, password) VALUES (?, ?)";
-
-    db.query(query, [username, hashedPassword], (err) => {
-        if (err) {
-            if (err.code === 'ER_DUP_ENTRY') {
-                res.status(409).json({ message: 'Username already exists' });
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10); // 加密密码
+        const query = "INSERT INTO users (username, password) VALUES (?, ?)";
+        db.query(query, [username, hashedPassword], (err) => {
+            if (err) {
+                if (err.code === 'ER_DUP_ENTRY') {
+                    res.status(409).json({ message: 'Username already exists' });
+                } else {
+                    console.error('Database error:', err);
+                    res.status(500).json({ message: 'Database error' });
+                }
             } else {
-                res.status(500).json({ message: 'Database error' });
+                res.status(201).json({ message: 'User registered successfully' });
             }
-        } else {
-            res.status(201).json({ message: 'User registered successfully' });
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Error during registration:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // 登录路由
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     const query = "SELECT * FROM users WHERE username = ?";
-
     db.query(query, [username], async (err, results) => {
         if (err) {
             res.status(500).json({ message: 'Database error' });
@@ -144,6 +148,15 @@ app.post('/logout', (req, res) => {
         }
         res.send('Logout successful');
     });
+});
+
+// 获取当前登录用户信息
+app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
+    if (req.session.user) {
+        res.json({ username: req.session.user.username });
+    } else {
+        res.status(401).json({ message: 'User not authenticated' });
+    }
 });
 
 // 设置 multer 存储配置
