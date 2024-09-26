@@ -25,6 +25,10 @@ const db = mysql.createConnection({
     password: process.env.DB_PASSWORD || 'your-rds-password',
     database: process.env.DB_NAME || 'your-database-name',
     port: process.env.DB_PORT || 3306,
+    ssl: {
+        ca: require('fs').readFileSync(process.env.SSL_CERT_PATH || '/home/ssm-user/AmazonRootCA1.pem'),
+        rejectUnauthorized: true // 启用 SSL 验证
+    }
 });
 
 // 测试数据库连接
