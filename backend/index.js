@@ -98,31 +98,41 @@ app.get('/', (req, res) => {
 // 注册路由
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10); // 加密密码
-        const query = "INSERT INTO users (username, password) VALUES (?, ?)";
-        db.query(query, [username, hashedPassword], (err) => {
-            if (err) {
-                if (err.code === 'ER_DUP_ENTRY') {
-                    res.status(409).json({ message: 'Username already exists' });
-                } else {
-                    console.error('Database error:', err);
-                    res.status(500).json({ message: 'Database error' });
-                }
+    const hashedPassword = await bcrypt.hash(password, 10); // 加密密码
+    const query = "INSERT INTO users (username, password) VALUES (?, ?)";
+
+    db.query(query, [username, hashedPassword], (err) => {
+        if (err) {
+            if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ message: 'Username already exists' });
             } else {
-                res.status(201).json({ message: 'User registered successfully' });
+                return res.status(500).json({ message: 'Database error' });
+            }
+        }
+
+        // 创建 S3 文件夹
+        const params = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Key: `${username}/` // S3 中的文件夹以斜杠结尾
+        };
+
+        s3.putObject(params, (s3Err) => {
+            if (s3Err) {
+                console.error('Error creating folder in S3:', s3Err);
+                return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
+            } else {
+                console.log(`S3 folder created for user: ${username}`);
+                return res.status(201).json({ message: 'User registered successfully and S3 folder created' });
             }
         });
-    } catch (error) {
-        console.error('Error during registration:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
+    });
 });
 
 // 登录路由
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     const query = "SELECT * FROM users WHERE username = ?";
+
     db.query(query, [username], async (err, results) => {
         if (err) {
             res.status(500).json({ message: 'Database error' });
@@ -150,6 +160,35 @@ app.post('/logout', (req, res) => {
     });
 });
 
+// 浏览用户文件的路由
+app.get('/browse/:username', ensureAuthenticated, (req, res) => {
+    const { username } = req.params;
+
+    if (req.session.user.username !== username) {
+        return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
+    }
+
+    // 在这里从 S3 获取用户的文件列表
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: `${username}/`
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            console.error('Error fetching files from S3:', err);
+            return res.status(500).json({ message: 'Error fetching files from S3' });
+        }
+
+        const fileLinks = data.Contents.map(item => {
+            const fileUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`;
+            return `<a href="${fileUrl}" target="_blank">${item.Key}</a>`;
+        }).join('<br>');
+
+        res.send(fileLinks);
+    });
+});
+
 // 获取当前登录用户信息
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     if (req.session.user) {
@@ -168,6 +207,28 @@ const upload = multer({
     limits: { fileSize: 1073741824 } // 1 GB
 }).single('video');
 
+// 视频转码函数
+function transcodeVideo(inputPath, outputPath, resolution) {
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+            .output(outputPath)
+            .videoCodec('libx264')
+            .size(resolution)
+            .on('progress', (progress) => {
+                currentProgress = progress.percent;
+            })
+            .on('end', () => {
+                currentProgress = 100;
+                resolve();
+            })
+            .on('error', (err) => {
+                console.error(`Error transcoding file: ${err.message}`);
+                reject(err);
+            })
+            .run();
+    });
+}
+
 // 上传并转码的路由，文件存储到 S3，视频元数据存储到 RDS
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
@@ -180,7 +241,8 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 
         const username = req.session.user.username;
         const originalFileName = req.file.originalname;
-        const fileKey = `${username}/${originalFileName}`;
+        const videoFolder = `${username}/${originalFileName}/`; // 用户名为根目录，文件名为子目录
+        const fileKey = `${videoFolder}${originalFileName}`; // 文件的S3路径
 
         // 上传文件到 S3
         const params = {
@@ -191,8 +253,18 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         };
 
         try {
-            // 将文件上传到 S3
+            // 上传原始文件到 S3
             await s3.upload(params).promise();
+
+            // 转码视频
+            const inputPath = req.file.path; // 视频的临时路径
+            const outputPaths = [
+                { path: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
+                { path: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
+                { path: `${videoFolder}360p-${originalFileName}`, resolution: '640x360' }
+            ];
+
+            await Promise.all(outputPaths.map(output => transcodeVideo(inputPath, output.path, output.resolution)));
 
             // 将文件信息存储到 RDS
             const videoId = randomUUID(); // 使用 UUID 作为视频的唯一标识

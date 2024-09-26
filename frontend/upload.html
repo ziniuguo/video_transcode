@@ -27,7 +27,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            color: black; /* Set font color to black */
+            color: black; /* 设置文字颜色 */
             font-weight: bold;
         }
     </style>
@@ -43,7 +43,7 @@
         <button type="button" class="btn btn-primary" id="uploadButton">Upload</button>
     </form>
 
-    <!-- Upload and transcoding progress bar -->
+    <!-- 上传和转码进度条 -->
     <div id="uploadProgressContainer">
         <progress id="uploadProgress" value="0" max="100"></progress>
         <div id="progressLabel">Waiting...</div>
@@ -53,7 +53,7 @@
     <div id="fileLinks" class="mt-4"></div>
     <button type="button" class="btn btn-danger mt-3" id="deleteFolderButton">Delete All Folders</button>
 
-    <!-- Logout button -->
+    <!-- 注销按钮 -->
     <button type="button" class="btn btn-warning mt-3" id="logoutButton">Logout</button>
 </div>
 
@@ -61,6 +61,7 @@
 <script>
     let sessionUsername = '';
 
+    // 获取当前会话中的用户名
     function getSessionUsername() {
         fetch('http://3.27.160.88:3000/getUserInfo', {
             credentials: 'include'
@@ -73,7 +74,7 @@
             })
             .then(data => {
                 sessionUsername = data.username;
-                loadFileList();
+                loadFileList();  // 加载文件列表
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -81,6 +82,7 @@
             });
     }
 
+    // 上传文件的函数
     document.getElementById('uploadButton').addEventListener('click', function () {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
@@ -99,13 +101,11 @@
         progressElement.value = 0;
         progressLabel.textContent = 'Uploading...';
 
-        // Create a new XMLHttpRequest instance
+        // 创建 XMLHttpRequest 进行上传
         const xhr = new XMLHttpRequest();
-
-        // Make sure to open the request before calling send
         xhr.open('POST', 'http://3.27.160.88:3000/upload', true);
 
-        // Upload progress listener
+        // 监听上传进度
         xhr.upload.onprogress = function (event) {
             if (event.lengthComputable) {
                 const percentComplete = (event.loaded / event.total) * 100;
@@ -117,9 +117,9 @@
         xhr.onload = function () {
             if (xhr.status === 200) {
                 document.getElementById('uploadStatus').innerText = 'Upload complete! Starting transcoding...';
-                progressElement.value = 0; // Reset progress bar
-                progressLabel.textContent = 'Transcoding...'; // Update label
-                startTranscodingProgress();  // Start monitoring transcoding progress
+                progressElement.value = 0; // 重置进度条
+                progressLabel.textContent = 'Transcoding...';
+                startTranscodingProgress();  // 开始监控转码进度
             } else {
                 document.getElementById('uploadStatus').innerText = 'Upload failed: ' + xhr.statusText;
                 progressLabel.textContent = 'Error during upload';
@@ -131,30 +131,25 @@
             progressLabel.textContent = 'Upload error';
         };
 
-        // Ensure that send() is called after open() has completed
-        try {
-            xhr.send(formData);
-        } catch (error) {
-            console.error('An error occurred while sending FormData:', error);
-        }
+        xhr.send(formData);
     });
 
-
+    // 开始监控转码进度
     function startTranscodingProgress() {
         const progressElement = document.getElementById('uploadProgress');
         const progressLabel = document.getElementById('progressLabel');
 
-        // Request transcoding progress every second
+        // 每秒请求一次转码进度
         const intervalId = setInterval(() => {
             fetch('http://3.27.160.88:3000/transcodingProgress', { credentials: 'include' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.progress >= 100) {
-                        clearInterval(intervalId); // Stop progress checks
+                        clearInterval(intervalId); // 停止请求
                         document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
                         progressElement.value = 100;
                         progressLabel.textContent = 'Transcoding complete!';
-                        loadFileList(); // Update file list
+                        loadFileList(); // 更新文件列表
                     } else {
                         progressElement.value = data.progress;
                         progressLabel.textContent = `Transcoding... ${Math.round(data.progress)}%`;
@@ -163,9 +158,10 @@
                 .catch(error => {
                     console.error('Error:', error);
                 });
-        }, 1000);  // Request progress every second
+        }, 1000);  // 每秒请求一次
     }
 
+    // 加载文件列表
     function loadFileList() {
         if (!sessionUsername) {
             console.error('No session username found');
@@ -176,9 +172,18 @@
         fetch('http://3.27.160.88:3000/browse/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
         })
-            .then(response => response.text())
-            .then(html => {
-                document.getElementById('fileLinks').innerHTML = html;
+            .then(response => response.json())
+            .then(videoList => {
+                const fileLinksDiv = document.getElementById('fileLinks');
+                fileLinksDiv.innerHTML = ''; // 清空之前的内容
+                videoList.forEach(video => {
+                    const link = document.createElement('a');
+                    link.href = video.fileUrl;
+                    link.textContent = video.filename;
+                    link.target = '_blank'; // 打开新窗口查看视频
+                    fileLinksDiv.appendChild(link);
+                    fileLinksDiv.appendChild(document.createElement('br')); // 添加换行符
+                });
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -186,33 +191,12 @@
             });
     }
 
+    // 页面加载后获取用户名并加载文件列表
     document.addEventListener('DOMContentLoaded', function() {
         getSessionUsername();
     });
 
-    function deleteFolder(folderName) {
-        if (!sessionUsername) {
-            alert('Cannot delete folder without username.');
-            return;
-        }
-
-        const deleteUrl = `http://3.27.160.88:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`;
-
-        fetch(deleteUrl, {
-            method: 'DELETE',
-            credentials: 'include'
-        })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                loadFileList(); // Reload the file list
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while deleting the folder: ' + error.message);
-            });
-    }
-
+    // 删除文件夹的函数
     document.getElementById('deleteFolderButton').addEventListener('click', function () {
         if (!sessionUsername) {
             alert('Cannot delete folder without username.');
@@ -228,7 +212,7 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                document.getElementById('fileLinks').innerHTML = ''; // Clear the file list
+                document.getElementById('fileLinks').innerHTML = ''; // 清空文件列表
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -236,7 +220,7 @@
             });
     });
 
-    // Logout function
+    // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('http://3.27.160.88:3000/logout', {
             method: 'POST',
@@ -250,24 +234,13 @@
             })
             .then(data => {
                 alert('Logged out successfully!');
-                window.location.href = '/'; // Redirect to the homepage
+                window.location.href = '/'; // 重定向到首页
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while logging out: ' + error.message);
             });
     });
-
-    // Create a dynamic delete button
-    function createDeleteButton(folderPath) {
-        const button = document.createElement('button');
-        button.textContent = 'Delete Folder';
-        button.className = 'btn btn-danger';
-        button.onclick = function () {
-            deleteFolder(folderPath);
-        };
-        return button;
-    }
 </script>
 </body>
 </html>
