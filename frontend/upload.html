@@ -62,7 +62,7 @@
     let sessionUsername = '';
 
     function getSessionUsername() {
-        fetch('http://13.236.94.49:3000/getUserInfo', {
+        fetch('http://3.27.160.88:3000/getUserInfo', {
             credentials: 'include'
         })
             .then(response => {
@@ -103,7 +103,7 @@
         const xhr = new XMLHttpRequest();
 
         // Make sure to open the request before calling send
-        xhr.open('POST', 'http://13.236.94.49:3000/upload', true);
+        xhr.open('POST', 'http://3.27.160.88:3000/upload', true);
 
         // Upload progress listener
         xhr.upload.onprogress = function (event) {
@@ -146,7 +146,7 @@
 
         // Request transcoding progress every second
         const intervalId = setInterval(() => {
-            fetch('http://13.236.94.49:3000/transcodingProgress', { credentials: 'include' })
+            fetch('http://3.27.160.88:3000/transcodingProgress', { credentials: 'include' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.progress >= 100) {
@@ -173,7 +173,7 @@
             return;
         }
 
-        fetch('http://13.236.94.49:3000/browse/' + encodeURIComponent(sessionUsername), {
+        fetch('http://3.27.160.88:3000/browse/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
         })
             .then(response => response.text())
@@ -196,7 +196,7 @@
             return;
         }
 
-        const deleteUrl = `http://13.236.94.49:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`;
+        const deleteUrl = `http://3.27.160.88:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`;
 
         fetch(deleteUrl, {
             method: 'DELETE',
@@ -219,7 +219,7 @@
             return;
         }
 
-        const deleteAllUrl = `http://13.236.94.49:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/your_subfolder_name`;
+        const deleteAllUrl = `http://3.27.160.88:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/your_subfolder_name`;
 
         fetch(deleteAllUrl, {
             method: 'DELETE',
@@ -238,7 +238,7 @@
 
     // Logout function
     document.getElementById('logoutButton').addEventListener('click', function () {
-        fetch('http://13.236.94.49:3000/logout', {
+        fetch('http://3.27.160.88:3000/logout', {
             method: 'POST',
             credentials: 'include'
         })
