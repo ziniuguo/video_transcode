@@ -20,14 +20,6 @@ const s3 = new AWS.S3({
     region: process.env.AWS_REGION
 });
 
-s3.listBuckets((err, data) => {
-    if (err) {
-        console.log("S3: Error", err);
-    } else {
-        console.log("S3: Success");
-    }
-});
-
 // MySQL 连接配置
 const db = mysql.createConnection({
     host: process.env.DB_HOST,
@@ -121,20 +113,34 @@ app.post('/register', async (req, res) => {
             }
         }
 
-        // 创建 S3 文件夹
+        // 检查 S3 文件夹是否存在
         const params = {
             Bucket: process.env.AWS_S3_BUCKET,
-            Key: `${username}/` // S3 中的文件夹以斜杠结尾
+            Prefix: `${username}/`
         };
 
-        s3.putObject(params, (s3Err) => {
+        s3.listObjectsV2(params, (s3Err, data) => {
             if (s3Err) {
-                console.error('Error creating folder in S3:', s3Err);
-                return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
-            } else {
+                console.error('Error checking S3 for existing folder:', s3Err);
+                return res.status(500).json({ message: 'Error checking for existing folder in S3' });
+            }
+
+            if (data.Contents.length > 0) {
+                return res.status(409).json({ message: 'S3 folder already exists' });
+            }
+
+            // 创建 S3 文件夹
+            s3.putObject({
+                Bucket: process.env.AWS_S3_BUCKET,
+                Key: `${username}/`
+            }, (s3Err) => {
+                if (s3Err) {
+                    console.error('Error creating folder in S3:', s3Err);
+                    return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
+                }
                 console.log(`S3 folder created for user: ${username}`);
                 return res.status(201).json({ message: 'User registered successfully and S3 folder created' });
-            }
+            });
         });
     });
 });
@@ -179,7 +185,7 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
         return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
     }
 
-    // 在这里从 S3 获取用户的文件列表
+    // 从 S3 获取用户的文件列表
     const params = {
         Bucket: process.env.AWS_S3_BUCKET,
         Prefix: `${username}/`
@@ -267,15 +273,21 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
             // 上传原始文件到 S3
             await s3.upload(params).promise();
 
+            // 临时保存视频文件用于转码
+            const tempFilePath = `/tmp/${randomUUID()}-${originalFileName}`;
+            fs.writeFileSync(tempFilePath, req.file.buffer);
+
             // 转码视频
-            const inputPath = req.file.path; // 视频的临时路径
             const outputPaths = [
                 { path: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
                 { path: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
                 { path: `${videoFolder}360p-${originalFileName}`, resolution: '640x360' }
             ];
 
-            await Promise.all(outputPaths.map(output => transcodeVideo(inputPath, output.path, output.resolution)));
+            await Promise.all(outputPaths.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
+
+            // 删除临时文件
+            fs.unlinkSync(tempFilePath);
 
             // 将文件信息存储到 RDS
             const videoId = randomUUID(); // 使用 UUID 作为视频的唯一标识
