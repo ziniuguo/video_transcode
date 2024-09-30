@@ -1,4 +1,5 @@
 require('dotenv').config(); // 加载环境变量
+const fs = require('fs');
 const { randomUUID } = require('crypto');
 const express = require("express");
 const cors = require('cors');
@@ -15,17 +16,27 @@ const bcrypt = require('bcrypt');
 const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: process.env.AWS_SESSION_TOKEN,
     region: process.env.AWS_REGION
+});
+
+s3.listBuckets((err, data) => {
+    if (err) {
+        console.log("S3: Error", err);
+    } else {
+        console.log("S3: Success");
+    }
 });
 
 // MySQL 连接配置
 const db = mysql.createConnection({
-    host: process.env.DB_HOST || 'your-rds-endpoint.rds.amazonaws.com',
-    user: process.env.DB_USER || 'your-rds-username',
-    password: process.env.DB_PASSWORD || 'your-rds-password',
-    database: process.env.DB_NAME || 'your-database-name',
-    port: process.env.DB_PORT || 3306,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT,
     ssl: {
+        ca: fs.readFileSync(process.env.SSL_CERT_PATH),
         rejectUnauthorized: false
     }
 });

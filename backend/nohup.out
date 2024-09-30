@@ -1,0 +1,129 @@
+Server started on port 3000
+(node:1137) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected to MySQL database on AWS RDS
+Users table ensured.
+Videos table ensured.
+Server started on port 3000
+(node:1237) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected to MySQL database on AWS RDS
+Users table ensured.
+Videos table ensured.
+Server started on port 3000
+(node:1299) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected to MySQL database on AWS RDS
+Users table ensured.
+Videos table ensured.
+Server started on port 3000
+(node:1451) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected to MySQL database on AWS RDS
+Users table ensured.
+Videos table ensured.
+Server started on port 3000
+(node:1505) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected to MySQL database on AWS RDS
+Users table ensured.
+Videos table ensured.
+Error creating folder in S3: InvalidAccessKeyId: The AWS Access Key Id you provided does not exist in our records.
+    at Request.extractError (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/services/s3.js:757:35)
+    at Request.callListeners (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/sequential_executor.js:106:20)
+    at Request.emit (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/sequential_executor.js:78:10)
+    at Request.emit (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/request.js:686:14)
+    at Request.transition (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/request.js:22:10)
+    at AcceptorStateMachine.runTo (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/state_machine.js:14:12)
+    at /home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/state_machine.js:26:10
+    at Request.<anonymous> (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/request.js:38:9)
+    at Request.<anonymous> (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/request.js:688:12)
+    at Request.callListeners (/home/ssm-user/video_transcode/backend/node_modules/aws-sdk/lib/sequential_executor.js:116:18) {
+  code: 'InvalidAccessKeyId',
+  region: null,
+  time: 2024-09-26T17:16:43.564Z,
+  requestId: 'DCEGV2PPVM8ESNX7',
+  extendedRequestId: 'C0PFYWxerV6QtK0GpN5HJbQONamS7MBLaf05N2I/b3OAU0FKMt99Th5+XjEe17SV3JUrLHl+YGI=',
+  cfId: undefined,
+  statusCode: 403,
+  retryable: false,
+  retryDelay: 64.7643055337974
+}
+Server started on port 3000
+(node:3410) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected to MySQL database on AWS RDS
+Users table ensured.
+Videos table ensured.
+node:events:491
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1463:16)
+    at listenInCluster (node:net:1511:12)
+    at Server.listen (node:net:1599:7)
+    at Function.listen (/home/ssm-user/video_transcode/backend/node_modules/express/lib/application.js:635:24)
+    at Object.<anonymous> (/home/ssm-user/video_transcode/backend/index.js:299:5)
+    at Module._compile (node:internal/modules/cjs/loader:1198:14)
+    at Object.Module._extensions..js (node:internal/modules/cjs/loader:1252:10)
+    at Module.load (node:internal/modules/cjs/loader:1076:32)
+    at Function.Module._load (node:internal/modules/cjs/loader:911:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1490:8)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+node:events:491
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1463:16)
+    at listenInCluster (node:net:1511:12)
+    at Server.listen (node:net:1599:7)
+    at Function.listen (/home/ssm-user/video_transcode/backend/node_modules/express/lib/application.js:635:24)
+    at Object.<anonymous> (/home/ssm-user/video_transcode/backend/index.js:299:5)
+    at Module._compile (node:internal/modules/cjs/loader:1198:14)
+    at Object.Module._extensions..js (node:internal/modules/cjs/loader:1252:10)
+    at Module.load (node:internal/modules/cjs/loader:1076:32)
+    at Function.Module._load (node:internal/modules/cjs/loader:911:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1490:8)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
