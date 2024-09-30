@@ -295,5 +295,7 @@ function ensureAuthenticated(req, res, next) {
     }
 }
 
-// 启动服务器
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+// 启动服务器并监听 0.0.0.0
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server started on port ${PORT}, listening on 0.0.0.0`);
+});
