@@ -89,8 +89,9 @@
             });
     }
 
+    // 加载文件列表
     function loadFileList() {
-        fetch('http://3.25.114.97:3000/browse/' + encodeURIComponent(sessionUsername), {
+        fetch(`http://3.25.114.97:3000/browse/${encodeURIComponent(sessionUsername)}`, {
             credentials: 'include'
         })
             .then(response => response.json())
@@ -98,7 +99,7 @@
                 const fileLinksDiv = document.getElementById('fileLinks');
                 fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
-                const addedFolders = new Set(); // 用于追踪已添加的文件夹
+                const addedFolders = new Set(); // 追踪已经添加的文件夹
 
                 fileList.forEach(file => {
                     const folderName = file.folderName;
@@ -111,7 +112,7 @@
                         // 添加删除文件夹按钮
                         const deleteFolderButton = document.createElement('button');
                         deleteFolderButton.textContent = 'Delete Folder';
-                        deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-sm');
+                        deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-sm', 'ml-2');
                         deleteFolderButton.onclick = () => deleteFolder(folderName);
 
                         folderTitle.appendChild(deleteFolderButton);
@@ -129,7 +130,7 @@
                     const deleteButton = document.createElement('button');
                     deleteButton.textContent = 'Delete Video';
                     deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
-                    deleteButton.onclick = () => deleteVideo(folderName, filename);
+                    deleteButton.onclick = () => deleteFile(folderName, filename);
 
                     fileLinksDiv.appendChild(link);
                     fileLinksDiv.appendChild(deleteButton);
@@ -245,7 +246,7 @@
         }, 1000);  // 每秒请求一次
     }
 
-    // 删除视频文件的函数
+    // 删除文件
     function deleteFile(folder, filename) {
         const deleteUrl = `http://3.25.114.97:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
 
@@ -261,6 +262,25 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while deleting the file: ' + error.message);
+            });
+    }
+
+    // 删除文件夹
+    function deleteFolder(folder) {
+        const deleteUrl = `http://3.25.114.97:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}`;
+
+        fetch(deleteUrl, {
+            method: 'DELETE',
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadFileList(); // 重新加载文件列表
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the folder: ' + error.message);
             });
     }
 
