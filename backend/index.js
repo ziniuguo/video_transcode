@@ -180,6 +180,38 @@ app.post('/logout', (req, res) => {
     });
 });
 
+// 加载文件列表
+function loadFileList() {
+    if (!sessionUsername) {
+        console.error('No session username found');
+        document.getElementById('fileLinks').innerText = 'Cannot load file list without username.';
+        return;
+    }
+
+    fetch('http://3.25.114.97:3000/browse/' + encodeURIComponent(sessionUsername), {
+        credentials: 'include'
+    })
+        .then(response => response.json())
+        .then(fileList => {
+            const fileLinksDiv = document.getElementById('fileLinks');
+            fileLinksDiv.innerHTML = ''; // 清空之前的内容
+
+            fileList.forEach(file => {
+                const link = document.createElement('a');
+                link.href = file.fileUrl;
+                link.textContent = file.filename;
+                link.target = '_blank'; // 打开新窗口查看视频
+                fileLinksDiv.appendChild(link);
+                fileLinksDiv.appendChild(document.createElement('br')); // 添加换行符
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('fileLinks').innerText = 'An error occurred while fetching file list: ' + error.message;
+        });
+}
+
+
 // 列出用户的子目录 API
 app.get('/listFolders/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
