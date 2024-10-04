@@ -194,14 +194,18 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
             return res.status(500).json({ message: 'Error fetching files from S3' });
         }
 
+        // 修改返回为 JSON 格式
         const fileLinks = data.Contents.map(item => {
-            const fileUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`;
-            return `<a href="${fileUrl}" target="_blank">${item.Key}</a>`;
-        }).join('<br>');
+            return {
+                filename: item.Key,
+                fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
+            };
+        });
 
-        res.send(fileLinks);
+        res.json(fileLinks);  // 返回 JSON 数据
     });
 });
+
 
 // 获取当前登录用户信息
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
