@@ -12,8 +12,6 @@ const AWS = require('aws-sdk');
 const bcrypt = require('bcrypt');
 const os = require('os');
 
-// 确保 ffmpeg 路径正确
-ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 安装的 ffmpeg 路径
 
 // 配置 AWS S3
 const s3 = new AWS.S3({
@@ -211,8 +209,8 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 
         const username = req.session.user.username;
         const originalFileName = req.file.originalname;
-        const videoFolder = `${username}/${originalFileName}/`; // 用户名为根目录，文件名为子目录
-        const fileKey = `${videoFolder}${originalFileName}`; // 文件的S3路径
+        const videoFolder = `${username}/${originalFileName}/`; // 文件名为子目录
+        const fileKey = `${videoFolder}${originalFileName}`; // 原始文件的S3路径
 
         // 上传文件到 S3
         const params = {
@@ -327,29 +325,6 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
             fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
         }));
         res.json(fileLinks); // 返回 JSON 数据
-    });
-});
-
-app.get('/listFolders/:username', ensureAuthenticated, (req, res) => {
-    const { username } = req.params;
-
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: `${username}/`,
-        Delimiter: '/'  // 用于仅列出文件夹
-    };
-
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            console.error('Error fetching folders from S3:', err);
-            return res.status(500).json({ message: 'Error fetching folders from S3' });
-        }
-
-        const folders = data.CommonPrefixes.map(prefix => ({
-            folderName: prefix.Prefix.split('/')[1]  // 获取文件夹名称
-        }));
-
-        res.json(folders);  // 返回文件夹列表
     });
 });
 

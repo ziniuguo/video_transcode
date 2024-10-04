@@ -91,45 +91,47 @@
             .then(response => response.json())
             .then(fileList => {
                 const fileLinksDiv = document.getElementById('fileLinks');
-                fileLinksDiv.innerHTML = ''; // 清空之前的内容
+                if (fileLinksDiv) {
+                    fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
-                const addedFolders = new Set(); // 追踪已经添加的文件夹
+                    const addedFolders = new Set(); // 追踪已经添加的文件夹
 
-                fileList.forEach(file => {
-                    const folderName = file.folderName;
-                    const filename = file.filename;
+                    fileList.forEach(file => {
+                        const folderName = file.folderName;
+                        const filename = file.filename;
 
-                    if (!addedFolders.has(folderName)) {
-                        const folderTitle = document.createElement('h4');
-                        folderTitle.textContent = folderName;
+                        if (!addedFolders.has(folderName)) {
+                            const folderTitle = document.createElement('h4');
+                            folderTitle.textContent = folderName;
 
-                        // 添加删除文件夹按钮
-                        const deleteFolderButton = document.createElement('button');
-                        deleteFolderButton.textContent = 'Delete Folder';
-                        deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-sm', 'ml-2');
-                        deleteFolderButton.onclick = () => deleteFolder(folderName);
+                            // 添加删除文件夹按钮
+                            const deleteFolderButton = document.createElement('button');
+                            deleteFolderButton.textContent = 'Delete Folder';
+                            deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-sm', 'ml-2');
+                            deleteFolderButton.onclick = () => deleteFolder(folderName);
 
-                        folderTitle.appendChild(deleteFolderButton);
-                        fileLinksDiv.appendChild(folderTitle);
-                        addedFolders.add(folderName);
-                    }
+                            folderTitle.appendChild(deleteFolderButton);
+                            fileLinksDiv.appendChild(folderTitle);
+                            addedFolders.add(folderName);
+                        }
 
-                    // 创建视频链接
-                    const link = document.createElement('a');
-                    link.href = file.fileUrl;
-                    link.textContent = filename;
-                    link.target = '_blank'; // 在新窗口中打开
+                        // 创建视频链接
+                        const link = document.createElement('a');
+                        link.href = file.fileUrl;
+                        link.textContent = filename;
+                        link.target = '_blank'; // 在新窗口中打开
 
-                    // 添加删除视频按钮
-                    const deleteButton = document.createElement('button');
-                    deleteButton.textContent = 'Delete Video';
-                    deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
-                    deleteButton.onclick = () => deleteFile(folderName, filename);
+                        // 添加删除视频按钮
+                        const deleteButton = document.createElement('button');
+                        deleteButton.textContent = 'Delete Video';
+                        deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
+                        deleteButton.onclick = () => deleteFile(folderName, filename);
 
-                    fileLinksDiv.appendChild(link);
-                    fileLinksDiv.appendChild(deleteButton);
-                    fileLinksDiv.appendChild(document.createElement('br'));
-                });
+                        fileLinksDiv.appendChild(link);
+                        fileLinksDiv.appendChild(deleteButton);
+                        fileLinksDiv.appendChild(document.createElement('br'));
+                    });
+                }
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -137,21 +139,24 @@
             });
     }
 
+    // 加载文件夹列表
     function loadFolderList() {
-        fetch(`http://3.25.114.97:3000/listFolders/${encodeURIComponent(sessionUsername)}`, {
+        fetch('http://3.25.114.97:3000/listFolders/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
         })
             .then(response => response.json())
             .then(folderList => {
                 const folderSelect = document.getElementById('folderSelect');
-                folderSelect.innerHTML = '';  // 清空之前的选项
+                if (folderSelect) {
+                    folderSelect.innerHTML = ''; // 清空之前的选项
 
-                folderList.forEach(folder => {
-                    const option = document.createElement('option');
-                    option.value = folder.folderName;
-                    option.text = folder.folderName;
-                    folderSelect.appendChild(option);
-                });
+                    folderList.forEach(folder => {
+                        const option = document.createElement('option');
+                        option.value = folder.folderName;
+                        option.text = folder.folderName;
+                        folderSelect.appendChild(option);
+                    });
+                }
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -275,32 +280,6 @@
                 alert('An error occurred while deleting the folder: ' + error.message);
             });
     }
-
-    // 删除文件夹的函数
-    document.getElementById('deleteFolderButton').addEventListener('click', function () {
-        const selectedFolder = document.getElementById('folderSelect').value;  // 获取用户选中的文件夹名
-
-        if (!selectedFolder) {
-            alert('Please select a folder to delete.');
-            return;
-        }
-
-        const deleteUrl = `http://3.25.114.97:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(selectedFolder)}`;
-
-        fetch(deleteUrl, {
-            method: 'DELETE',
-            credentials: 'include'
-        })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                loadFileList(); // 重新加载文件列表
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while deleting the folder: ' + error.message);
-            });
-    });
 
     // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
