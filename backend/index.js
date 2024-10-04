@@ -6,11 +6,13 @@ const cors = require('cors');
 const session = require('express-session');
 const multer = require("multer");
 const path = require("path");
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const ffmpeg = require("fluent-ffmpeg");
 const mysql = require('mysql2');
 const AWS = require('aws-sdk');
 const bcrypt = require('bcrypt');
+
+// 确保 ffmpeg 路径正确
+ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 指定服务器上安装的 ffmpeg 路径
 
 // 配置 AWS S3
 const s3 = new AWS.S3({
@@ -65,7 +67,7 @@ db.query(createUsersTable, (err) => {
     }
 });
 
-// 确保 videos 表存在，用于存储视频的相关信息
+// 确保 videos 表存在
 const createVideosTable = `
 CREATE TABLE IF NOT EXISTS videos (
     id VARCHAR(255) PRIMARY KEY,
