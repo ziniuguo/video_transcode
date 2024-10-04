@@ -10,6 +10,7 @@ const ffmpeg = require("fluent-ffmpeg");
 const mysql = require('mysql2');
 const AWS = require('aws-sdk');
 const bcrypt = require('bcrypt');
+const os = require('os');
 
 // 确保 ffmpeg 路径正确
 ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 指定服务器上安装的 ffmpeg 路径
@@ -194,7 +195,7 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
             return res.status(500).json({ message: 'Error fetching files from S3' });
         }
 
-        // 修改返回为 JSON 格式
+        // 返回 JSON 格式的文件列表
         const fileLinks = data.Contents.map(item => {
             return {
                 filename: item.Key,
@@ -202,10 +203,9 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
             };
         });
 
-        res.json(fileLinks);  // 返回 JSON 数据
+        res.json(fileLinks); // 返回 JSON 数据
     });
 });
-
 
 // 获取当前登录用户信息
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
@@ -233,10 +233,10 @@ function transcodeVideo(inputPath, outputPath, resolution) {
             .videoCodec('libx264')
             .size(resolution)
             .on('progress', (progress) => {
-                currentProgress = progress.percent;
+                console.log(`Transcoding progress: ${progress.percent}%`);
             })
             .on('end', () => {
-                currentProgress = 100;
+                console.log(`Transcoding complete: ${outputPath}`);
                 resolve();
             })
             .on('error', (err) => {
@@ -274,15 +274,21 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
             // 上传原始文件到 S3
             await s3.upload(params).promise();
 
+            // 将文件写入本地临时文件夹
+            const tempFilePath = path.join(os.tmpdir(), originalFileName);
+            fs.writeFileSync(tempFilePath, req.file.buffer);
+
             // 转码视频
-            const inputPath = req.file.path; // 视频的临时路径
             const outputPaths = [
                 { path: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
                 { path: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
                 { path: `${videoFolder}360p-${originalFileName}`, resolution: '640x360' }
             ];
 
-            await Promise.all(outputPaths.map(output => transcodeVideo(inputPath, output.path, output.resolution)));
+            await Promise.all(outputPaths.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
+
+            // 删除本地临时文件
+            fs.unlinkSync(tempFilePath);
 
             // 将文件信息存储到 RDS
             const videoId = randomUUID(); // 使用 UUID 作为视频的唯一标识
@@ -301,6 +307,42 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         } catch (uploadError) {
             res.status(500).send({ msg: 'Error uploading file to S3', error: uploadError.message });
         }
+    });
+});
+
+// 删除文件夹的路由
+app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
+    const { username, folder } = req.params;
+    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: prefix
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error fetching files from S3' });
+        }
+
+        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
+
+        if (objectsToDelete.length === 0) {
+            return res.status(404).json({ message: 'Folder not found' });
+        }
+
+        const deleteParams = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Delete: { Objects: objectsToDelete }
+        };
+
+        s3.deleteObjects(deleteParams, (deleteErr) => {
+            if (deleteErr) {
+                return res.status(500).json({ message: 'Error deleting folder' });
+            }
+
+            res.json({ message: 'Folder deleted successfully' });
+        });
     });
 });
 
