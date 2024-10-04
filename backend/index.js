@@ -13,7 +13,7 @@ const bcrypt = require('bcrypt');
 const os = require('os');
 
 // 确保 ffmpeg 路径正确
-ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
+ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 指定服务器上安装的 ffmpeg 路径
 
 // 配置 AWS S3
 const s3 = new AWS.S3({
@@ -28,7 +28,10 @@ s3.listBuckets((err, data) => {
     if (err) {
         console.log("S3 Connection Error:", err);
     } else {
-        console.log("S3 Connection Success:", data.Buckets);
+        console.log("S3 Connection Success. Total Buckets: ", data.Buckets.length);
+        // 打印前5个存储桶名称
+        const sampleBuckets = data.Buckets.slice(0, 5).map(bucket => bucket.Name);
+        console.log("Sample Buckets: ", sampleBuckets);
     }
 });
 
@@ -177,6 +180,65 @@ app.post('/logout', (req, res) => {
     });
 });
 
+// 列出用户的子目录 API
+app.get('/listFolders/:username', ensureAuthenticated, (req, res) => {
+    const { username } = req.params;
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: `${username}/`,
+        Delimiter: '/' // 只列出文件夹（前缀）
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            console.error('Error fetching folders from S3:', err);
+            return res.status(500).json({ message: 'Error fetching folders from S3' });
+        }
+
+        const folders = data.CommonPrefixes.map(prefix => ({
+            folderName: prefix.Prefix.split('/')[1] // 提取子目录名称
+        }));
+
+        res.json(folders);  // 返回文件夹列表
+    });
+});
+
+// 删除文件夹的路由
+app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
+    const { username, folder } = req.params;
+    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: prefix
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error fetching files from S3' });
+        }
+
+        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
+
+        if (objectsToDelete.length === 0) {
+            return res.status(404).json({ message: 'Folder not found' });
+        }
+
+        const deleteParams = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Delete: { Objects: objectsToDelete }
+        };
+
+        s3.deleteObjects(deleteParams, (deleteErr) => {
+            if (deleteErr) {
+                return res.status(500).json({ message: 'Error deleting folder' });
+            }
+
+            res.json({ message: 'Folder deleted successfully' });
+        });
+    });
+});
+
 // 浏览用户文件的路由
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
@@ -301,42 +363,6 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         } catch (uploadError) {
             res.status(500).send({ msg: 'Error uploading file to S3', error: uploadError.message });
         }
-    });
-});
-
-// 删除文件夹的路由
-app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
-    const { username, folder } = req.params;
-    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
-
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: prefix
-    };
-
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error fetching files from S3' });
-        }
-
-        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
-
-        if (objectsToDelete.length === 0) {
-            return res.status(404).json({ message: 'Folder not found' });
-        }
-
-        const deleteParams = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Delete: { Objects: objectsToDelete }
-        };
-
-        s3.deleteObjects(deleteParams, (deleteErr) => {
-            if (deleteErr) {
-                return res.status(500).json({ message: 'Error deleting folder' });
-            }
-
-            res.json({ message: 'Folder deleted successfully' });
-        });
     });
 });
 
