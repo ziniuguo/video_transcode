@@ -13,7 +13,7 @@ const bcrypt = require('bcrypt');
 const os = require('os');
 
 // 确保 ffmpeg 路径正确
-ffmpeg.setFfmpegPath("/snap/bin/ffmpeg"); // 指定安装的 ffmpeg 路径
+ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 安装的 ffmpeg 路径
 
 // 配置 AWS S3
 const s3 = new AWS.S3({
@@ -211,8 +211,8 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 
         const username = req.session.user.username;
         const originalFileName = req.file.originalname;
-        const videoFolder = `${username}/${originalFileName}/`; // 文件名为子目录
-        const fileKey = `${videoFolder}${originalFileName}`; // 原始文件的S3路径
+        const videoFolder = `${username}/${originalFileName}/`; // 用户名为根目录，文件名为子目录
+        const fileKey = `${videoFolder}${originalFileName}`; // 文件的S3路径
 
         // 上传文件到 S3
         const params = {
