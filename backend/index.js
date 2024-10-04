@@ -330,6 +330,29 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     });
 });
 
+app.get('/listFolders/:username', ensureAuthenticated, (req, res) => {
+    const { username } = req.params;
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: `${username}/`,
+        Delimiter: '/'  // 用于仅列出文件夹
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            console.error('Error fetching folders from S3:', err);
+            return res.status(500).json({ message: 'Error fetching folders from S3' });
+        }
+
+        const folders = data.CommonPrefixes.map(prefix => ({
+            folderName: prefix.Prefix.split('/')[1]  // 获取文件夹名称
+        }));
+
+        res.json(folders);  // 返回文件夹列表
+    });
+});
+
 // 获取当前登录用户信息
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     if (req.session.user) {

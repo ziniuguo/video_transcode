@@ -137,15 +137,14 @@
             });
     }
 
-    // 加载文件夹列表
     function loadFolderList() {
-        fetch('http://3.25.114.97:3000/listFolders', {
+        fetch(`http://3.25.114.97:3000/listFolders/${encodeURIComponent(sessionUsername)}`, {
             credentials: 'include'
         })
             .then(response => response.json())
             .then(folderList => {
                 const folderSelect = document.getElementById('folderSelect');
-                folderSelect.innerHTML = ''; // 清空之前的选项
+                folderSelect.innerHTML = '';  // 清空之前的选项
 
                 folderList.forEach(folder => {
                     const option = document.createElement('option');
