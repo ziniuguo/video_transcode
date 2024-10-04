@@ -113,54 +113,56 @@ app.get('/', (req, res) => {
 // 注册路由
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10); // 加密密码
-    const query = "INSERT INTO users (username, password) VALUES (?, ?)";
-
-    db.query(query, [username, hashedPassword], (err) => {
-        if (err) {
-            if (err.code === 'ER_DUP_ENTRY') {
-                return res.status(409).json({ message: 'Username already exists' });
-            } else {
-                return res.status(500).json({ message: 'Database error' });
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10); // 加密密码
+        const query = "INSERT INTO users (username, password) VALUES (?, ?)";
+        db.query(query, [username, hashedPassword], (err) => {
+            if (err) {
+                if (err.code === 'ER_DUP_ENTRY') {
+                    return res.status(409).json({ message: 'Username already exists' });
+                } else {
+                    return res.status(500).json({ message: 'Database error' });
+                }
             }
-        }
 
-        // 创建 S3 文件夹
-        const params = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Key: `${username}/` // S3 中的文件夹以斜杠结尾
-        };
+            // 创建 S3 文件夹
+            const params = {
+                Bucket: process.env.AWS_S3_BUCKET,
+                Key: `${username}/` // S3 中的文件夹以斜杠结尾
+            };
 
-        s3.putObject(params, (s3Err) => {
-            if (s3Err) {
-                console.error('Error creating folder in S3:', s3Err);
-                return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
-            } else {
-                console.log(`S3 folder created for user: ${username}`);
-                return res.status(201).json({ message: 'User registered successfully and S3 folder created' });
-            }
+            s3.putObject(params, (s3Err) => {
+                if (s3Err) {
+                    console.error('Error creating folder in S3:', s3Err);
+                    return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
+                } else {
+                    console.log(`S3 folder created for user: ${username}`);
+                    return res.status(201).json({ message: 'User registered successfully and S3 folder created' });
+                }
+            });
         });
-    });
+    } catch (error) {
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 // 登录路由
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     const query = "SELECT * FROM users WHERE username = ?";
-
     db.query(query, [username], async (err, results) => {
         if (err) {
-            res.status(500).json({ message: 'Database error' });
+            return res.status(500).json({ message: 'Database error' });
         } else if (results.length > 0) {
             const match = await bcrypt.compare(password, results[0].password);
             if (match) {
                 req.session.user = { username: results[0].username };
-                res.status(200).json({ message: 'Login successful' });
+                return res.status(200).json({ message: 'Login successful' });
             } else {
-                res.status(401).json({ message: 'Login failed' });
+                return res.status(401).json({ message: 'Login failed' });
             }
         } else {
-            res.status(401).json({ message: 'Login failed' });
+            return res.status(401).json({ message: 'Login failed' });
         }
     });
 });
@@ -178,31 +180,23 @@ app.post('/logout', (req, res) => {
 // 浏览用户文件的路由
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
-
     if (req.session.user.username !== username) {
         return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
     }
-
     // 在这里从 S3 获取用户的文件列表
     const params = {
         Bucket: process.env.AWS_S3_BUCKET,
         Prefix: `${username}/`
     };
-
     s3.listObjectsV2(params, (err, data) => {
         if (err) {
             console.error('Error fetching files from S3:', err);
             return res.status(500).json({ message: 'Error fetching files from S3' });
         }
-
-        // 返回 JSON 格式的文件列表
-        const fileLinks = data.Contents.map(item => {
-            return {
-                filename: item.Key,
-                fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
-            };
-        });
-
+        const fileLinks = data.Contents.map(item => ({
+            filename: item.Key,
+            fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
+        }));
         res.json(fileLinks); // 返回 JSON 数据
     });
 });
