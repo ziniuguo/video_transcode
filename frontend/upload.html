@@ -63,7 +63,7 @@
 
     // 获取当前会话中的用户名
     function getSessionUsername() {
-        fetch('http://13.210.176.74:3000/getUserInfo', {
+        fetch('http://3.25.114.97:3000/getUserInfo', {
             credentials: 'include'
         })
             .then(response => {
@@ -103,7 +103,7 @@
 
         // 创建 XMLHttpRequest 进行上传
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'http://13.210.176.74:3000/upload', true);
+        xhr.open('POST', 'http://3.25.114.97:3000/upload', true);
 
         // 监听上传进度
         xhr.upload.onprogress = function (event) {
@@ -141,7 +141,7 @@
 
         // 每秒请求一次转码进度
         const intervalId = setInterval(() => {
-            fetch('http://13.210.176.74:3000/transcodingProgress', { credentials: 'include' })
+            fetch('http://3.25.114.97:3000/transcodingProgress', { credentials: 'include' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.progress >= 100) {
@@ -169,7 +169,7 @@
             return;
         }
 
-        fetch('http://13.210.176.74:3000/browse/' + encodeURIComponent(sessionUsername), {
+        fetch('http://3.25.114.97:3000/browse/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
         })
             .then(response => response.json())
@@ -203,7 +203,7 @@
             return;
         }
 
-        const deleteAllUrl = `http://13.210.176.74:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/your_subfolder_name`;
+        const deleteAllUrl = `http://3.25.114.97:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/your_subfolder_name`;
 
         fetch(deleteAllUrl, {
             method: 'DELETE',
@@ -222,7 +222,7 @@
 
     // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
-        fetch('http://13.210.176.74:3000/logout', {
+        fetch('http://3.25.114.97:3000/logout', {
             method: 'POST',
             credentials: 'include'
         })
