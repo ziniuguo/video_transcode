@@ -13,7 +13,7 @@ const bcrypt = require('bcrypt');
 const os = require('os');
 
 // 确保 ffmpeg 路径正确
-ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 指定服务器上安装的 ffmpeg 路径
+ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
 
 // 配置 AWS S3
 const s3 = new AWS.S3({

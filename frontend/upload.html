@@ -27,7 +27,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            color: black; /* 设置文字颜色 */
+            color: black;
             font-weight: bold;
         }
     </style>
@@ -203,7 +203,9 @@
             return;
         }
 
-        const deleteAllUrl = `http://3.25.114.97:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/your_subfolder_name`;
+        // 获取所有文件名作为子目录（或根据实际情况动态生成）
+        const folderToDelete = 'specific_subfolder_name'; // 动态替换为要删除的子目录名称
+        const deleteAllUrl = `http://3.25.114.97:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderToDelete)}`;
 
         fetch(deleteAllUrl, {
             method: 'DELETE',
