@@ -89,7 +89,6 @@
             });
     }
 
-    // 加载文件列表
     function loadFileList() {
         fetch('http://3.25.114.97:3000/browse/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
@@ -99,22 +98,42 @@
                 const fileLinksDiv = document.getElementById('fileLinks');
                 fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
+                const addedFolders = new Set(); // 用于追踪已添加的文件夹
+
                 fileList.forEach(file => {
+                    const folderName = file.folderName;
+                    const filename = file.filename;
+
+                    if (!addedFolders.has(folderName)) {
+                        const folderTitle = document.createElement('h4');
+                        folderTitle.textContent = folderName;
+
+                        // 添加删除文件夹按钮
+                        const deleteFolderButton = document.createElement('button');
+                        deleteFolderButton.textContent = 'Delete Folder';
+                        deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-sm');
+                        deleteFolderButton.onclick = () => deleteFolder(folderName);
+
+                        folderTitle.appendChild(deleteFolderButton);
+                        fileLinksDiv.appendChild(folderTitle);
+                        addedFolders.add(folderName);
+                    }
+
+                    // 创建视频链接
                     const link = document.createElement('a');
                     link.href = file.fileUrl;
-                    link.textContent = file.filename;
-                    link.target = '_blank'; // 打开新窗口查看视频
+                    link.textContent = filename;
+                    link.target = '_blank'; // 在新窗口中打开
 
-                    // 删除按钮
+                    // 添加删除视频按钮
                     const deleteButton = document.createElement('button');
-                    deleteButton.textContent = 'Delete';
-                    deleteButton.className = 'btn btn-danger btn-sm';
-                    deleteButton.onclick = () => deleteFile(file.folderName, file.filename);
+                    deleteButton.textContent = 'Delete Video';
+                    deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
+                    deleteButton.onclick = () => deleteVideo(folderName, filename);
 
-                    const lineBreak = document.createElement('br');
                     fileLinksDiv.appendChild(link);
                     fileLinksDiv.appendChild(deleteButton);
-                    fileLinksDiv.appendChild(lineBreak);
+                    fileLinksDiv.appendChild(document.createElement('br'));
                 });
             })
             .catch(error => {
@@ -122,6 +141,7 @@
                 document.getElementById('uploadStatus').innerText = 'An error occurred while fetching file list: ' + error.message;
             });
     }
+
 
     // 加载文件夹列表
     function loadFolderList() {
