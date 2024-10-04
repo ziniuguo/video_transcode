@@ -199,6 +199,7 @@ function transcodeVideo(inputPath, outputPath, resolution) {
     });
 }
 
+// 上传并转码的路由，文件存储到 S3，视频元数据存储到 RDS
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
@@ -213,7 +214,7 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         const videoFolder = `${username}/${originalFileName}/`; // 文件名为子目录
         const fileKey = `${videoFolder}${originalFileName}`; // 原始文件的S3路径
 
-        // 上传原始文件到 S3
+        // 上传文件到 S3
         const params = {
             Bucket: process.env.AWS_S3_BUCKET,
             Key: fileKey,
@@ -222,37 +223,24 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         };
 
         try {
-            // 上传原始文件
+            // 上传原始文件到 S3
             await s3.upload(params).promise();
 
             // 将文件写入本地临时文件夹
             const tempFilePath = path.join(os.tmpdir(), originalFileName);
             fs.writeFileSync(tempFilePath, req.file.buffer);
 
-            // 定义不同分辨率的输出路径
+            // 转码视频
             const outputPaths = [
-                { s3Key: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
-                { s3Key: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
-                { s3Key: `${videoFolder}360p-${originalFileName}`, resolution: '640x360' }
+                { path: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
+                { path: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
+                { path: `${videoFolder}360p-${originalFileName}`, resolution: '640x360' }
             ];
 
-            // 转码并上传每个视频
-            await Promise.all(outputPaths.map(async output => {
-                const tempOutputPath = path.join(os.tmpdir(), path.basename(output.s3Key)); // 临时文件路径
-                await transcodeVideo(tempFilePath, tempOutputPath, output.resolution);
+            await Promise.all(outputPaths.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
 
-                // 将转码文件上传到 S3
-                const transcodeParams = {
-                    Bucket: process.env.AWS_S3_BUCKET,
-                    Key: output.s3Key,
-                    Body: fs.readFileSync(tempOutputPath),
-                    ContentType: 'video/mp4'
-                };
-                await s3.upload(transcodeParams).promise();
-                fs.unlinkSync(tempOutputPath); // 删除临时文件
-            }));
-
-            fs.unlinkSync(tempFilePath); // 删除原始文件的临时文件
+            // 删除本地临时文件
+            fs.unlinkSync(tempFilePath);
 
             res.status(200).send({ msg: 'File uploaded and transcoded successfully' });
         } catch (uploadError) {
@@ -317,34 +305,30 @@ app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) =>
     });
 });
 
+// 浏览用户文件的路由
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
     if (req.session.user.username !== username) {
         return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
     }
-
+    // 在这里从 S3 获取用户的文件列表
     const params = {
         Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: `${username}/`,
-        Delimiter: '/'
+        Prefix: `${username}/`
     };
-
     s3.listObjectsV2(params, (err, data) => {
         if (err) {
             console.error('Error fetching files from S3:', err);
             return res.status(500).json({ message: 'Error fetching files from S3' });
         }
-
         const fileLinks = data.Contents.map(item => ({
-            folderName: item.Key.split('/')[1],  // 获取子目录名称
-            filename: item.Key.split('/')[2],  // 获取文件名
+            folderName: item.Key.split('/')[1],
+            filename: item.Key.split('/')[2],
             fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
         }));
-
-        res.json(fileLinks); // 返回 JSON 格式文件列表
+        res.json(fileLinks); // 返回 JSON 数据
     });
 });
-
 
 // 获取当前登录用户信息
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
