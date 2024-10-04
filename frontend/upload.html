@@ -89,7 +89,7 @@
             });
     }
 
-    // 定义loadFileList函数，用于加载文件列表
+    // 加载文件列表
     function loadFileList() {
         fetch('http://3.25.114.97:3000/browse/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
@@ -104,8 +104,17 @@
                     link.href = file.fileUrl;
                     link.textContent = file.filename;
                     link.target = '_blank'; // 打开新窗口查看视频
+
+                    // 删除按钮
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.className = 'btn btn-danger btn-sm';
+                    deleteButton.onclick = () => deleteFile(file.folderName, file.filename);
+
+                    const lineBreak = document.createElement('br');
                     fileLinksDiv.appendChild(link);
-                    fileLinksDiv.appendChild(document.createElement('br')); // 添加换行符
+                    fileLinksDiv.appendChild(deleteButton);
+                    fileLinksDiv.appendChild(lineBreak);
                 });
             })
             .catch(error => {
@@ -216,6 +225,25 @@
         }, 1000);  // 每秒请求一次
     }
 
+    // 删除视频文件的函数
+    function deleteFile(folder, filename) {
+        const deleteUrl = `http://3.25.114.97:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
+
+        fetch(deleteUrl, {
+            method: 'DELETE',
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadFileList(); // 重新加载文件列表
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the file: ' + error.message);
+            });
+    }
+
     // 删除文件夹的函数
     document.getElementById('deleteFolderButton').addEventListener('click', function () {
         const selectedFolder = document.getElementById('folderSelect').value;  // 获取用户选中的文件夹名
@@ -234,8 +262,7 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                document.getElementById('fileLinks').innerHTML = ''; // 清空文件列表
-                loadFolderList();  // 重新加载文件夹列表
+                loadFileList(); // 重新加载文件列表
             })
             .catch(error => {
                 console.error('Error:', error);

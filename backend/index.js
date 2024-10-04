@@ -13,7 +13,7 @@ const bcrypt = require('bcrypt');
 const os = require('os');
 
 // 确保 ffmpeg 路径正确
-ffmpeg.setFfmpegPath("/snap/bin/ffmpeg"); // 指定服务器上安装的 ffmpeg 路径
+ffmpeg.setFfmpegPath("/snap/bin/ffmpeg"); // 指定安装的 ffmpeg 路径
 
 // 配置 AWS S3
 const s3 = new AWS.S3({
@@ -29,9 +29,6 @@ s3.listBuckets((err, data) => {
         console.log("S3 Connection Error:", err);
     } else {
         console.log("S3 Connection Success. Total Buckets: ", data.Buckets.length);
-        // 打印前5个存储桶名称
-        const sampleBuckets = data.Buckets.slice(0, 5).map(bucket => bucket.Name);
-        console.log("Sample Buckets: ", sampleBuckets);
     }
 });
 
@@ -180,139 +177,6 @@ app.post('/logout', (req, res) => {
     });
 });
 
-// 加载文件列表
-function loadFileList() {
-    if (!sessionUsername) {
-        console.error('No session username found');
-        document.getElementById('fileLinks').innerText = 'Cannot load file list without username.';
-        return;
-    }
-
-    fetch('http://3.25.114.97:3000/browse/' + encodeURIComponent(sessionUsername), {
-        credentials: 'include'
-    })
-        .then(response => response.json())
-        .then(fileList => {
-            const fileLinksDiv = document.getElementById('fileLinks');
-            fileLinksDiv.innerHTML = ''; // 清空之前的内容
-
-            fileList.forEach(file => {
-                const link = document.createElement('a');
-                link.href = file.fileUrl;
-                link.textContent = file.filename;
-                link.target = '_blank'; // 打开新窗口查看视频
-                fileLinksDiv.appendChild(link);
-                fileLinksDiv.appendChild(document.createElement('br')); // 添加换行符
-            });
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            document.getElementById('fileLinks').innerText = 'An error occurred while fetching file list: ' + error.message;
-        });
-}
-
-
-// 列出用户的子目录 API
-app.get('/listFolders/:username', ensureAuthenticated, (req, res) => {
-    const { username } = req.params;
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: `${username}/`,
-        Delimiter: '/' // 只列出文件夹（前缀）
-    };
-
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            console.error('Error fetching folders from S3:', err);
-            return res.status(500).json({ message: 'Error fetching folders from S3' });
-        }
-
-        const folders = data.CommonPrefixes.map(prefix => ({
-            folderName: prefix.Prefix.split('/')[1] // 提取子目录名称
-        }));
-
-        res.json(folders);  // 返回文件夹列表
-    });
-});
-
-// 删除文件夹的路由
-app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
-    const { username, folder } = req.params;
-    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
-
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: prefix
-    };
-
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error fetching files from S3' });
-        }
-
-        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
-
-        if (objectsToDelete.length === 0) {
-            return res.status(404).json({ message: 'Folder not found' });
-        }
-
-        const deleteParams = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Delete: { Objects: objectsToDelete }
-        };
-
-        s3.deleteObjects(deleteParams, (deleteErr) => {
-            if (deleteErr) {
-                return res.status(500).json({ message: 'Error deleting folder' });
-            }
-
-            res.json({ message: 'Folder deleted successfully' });
-        });
-    });
-});
-
-// 浏览用户文件的路由
-app.get('/browse/:username', ensureAuthenticated, (req, res) => {
-    const { username } = req.params;
-    if (req.session.user.username !== username) {
-        return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
-    }
-    // 在这里从 S3 获取用户的文件列表
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: `${username}/`
-    };
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            console.error('Error fetching files from S3:', err);
-            return res.status(500).json({ message: 'Error fetching files from S3' });
-        }
-        const fileLinks = data.Contents.map(item => ({
-            filename: item.Key,
-            fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
-        }));
-        res.json(fileLinks); // 返回 JSON 数据
-    });
-});
-
-// 获取当前登录用户信息
-app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
-    if (req.session.user) {
-        res.json({ username: req.session.user.username });
-    } else {
-        res.status(401).json({ message: 'User not authenticated' });
-    }
-});
-
-// 设置 multer 存储配置
-const storage = multer.memoryStorage(); // 将文件存储到内存中，稍后上传到 S3
-
-// multer 配置
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 1073741824 } // 1 GB
-}).single('video');
-
 // 视频转码函数
 function transcodeVideo(inputPath, outputPath, resolution) {
     return new Promise((resolve, reject) => {
@@ -397,6 +261,105 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         }
     });
 });
+
+// 删除文件的路由
+app.delete('/deleteFile/:username/:folder/:filename', ensureAuthenticated, (req, res) => {
+    const { username, folder, filename } = req.params;
+    const fileKey = `${username}/${folder}/${filename}`; // 文件的S3路径
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: fileKey
+    };
+
+    s3.deleteObject(params, (err, data) => {
+        if (err) {
+            console.error('Error deleting file from S3:', err);
+            return res.status(500).json({ message: 'Error deleting file' });
+        }
+
+        res.json({ message: 'File deleted successfully' });
+    });
+});
+
+// 删除文件夹的路由
+app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
+    const { username, folder } = req.params;
+    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: prefix
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error fetching files from S3' });
+        }
+
+        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
+
+        if (objectsToDelete.length === 0) {
+            return res.status(404).json({ message: 'Folder not found' });
+        }
+
+        const deleteParams = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Delete: { Objects: objectsToDelete }
+        };
+
+        s3.deleteObjects(deleteParams, (deleteErr) => {
+            if (deleteErr) {
+                return res.status(500).json({ message: 'Error deleting folder' });
+            }
+
+            res.json({ message: 'Folder deleted successfully' });
+        });
+    });
+});
+
+// 浏览用户文件的路由
+app.get('/browse/:username', ensureAuthenticated, (req, res) => {
+    const { username } = req.params;
+    if (req.session.user.username !== username) {
+        return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
+    }
+    // 在这里从 S3 获取用户的文件列表
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: `${username}/`
+    };
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            console.error('Error fetching files from S3:', err);
+            return res.status(500).json({ message: 'Error fetching files from S3' });
+        }
+        const fileLinks = data.Contents.map(item => ({
+            folderName: item.Key.split('/')[1],
+            filename: item.Key.split('/')[2],
+            fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
+        }));
+        res.json(fileLinks); // 返回 JSON 数据
+    });
+});
+
+// 获取当前登录用户信息
+app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
+    if (req.session.user) {
+        res.json({ username: req.session.user.username });
+    } else {
+        res.status(401).json({ message: 'User not authenticated' });
+    }
+});
+
+// 设置 multer 存储配置
+const storage = multer.memoryStorage(); // 将文件存储到内存中，稍后上传到 S3
+
+// multer 配置
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 1073741824 } // 1 GB
+}).single('video');
 
 // 确保用户已认证的中间件
 function ensureAuthenticated(req, res, next) {
