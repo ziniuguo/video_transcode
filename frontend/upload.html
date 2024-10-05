@@ -250,6 +250,8 @@
                 progressLabel.textContent = 'Error during upload';
             }
         };
+        xhr.send(formData);  // 不要遗漏对 XMLHttpRequest 发送的调用
+    });
 
         // 开始监控总的转码进度
         function startTranscodingProgress() {
