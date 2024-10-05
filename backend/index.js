@@ -200,7 +200,7 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
     if (req.session.user.username !== username) {
-        return res.status(403).json({ message: 'You are not authorized to browse this user's files.' });
+        return res.status(403).json({ message: 'You are not authorized to browse this user files.' });
         }
         const params = {
             Bucket: process.env.AWS_S3_BUCKET,
