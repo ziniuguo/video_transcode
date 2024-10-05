@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -42,6 +43,7 @@
         }
     </style>
 </head>
+
 <body>
 <div class="container mt-5">
     <h2>File Upload</h2>
@@ -185,6 +187,57 @@
             });
     }
 
+    // 上传文件的函数
+    document.getElementById('uploadButton').addEventListener('click', function () {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert('Please choose a file first!');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('video', file);
+
+        const progressElement = document.getElementById('uploadProgress');
+        const progressLabel = document.getElementById('progressLabel');
+        progressElement.value = 0;
+        progressLabel.textContent = 'Uploading...';
+
+        // 创建 XMLHttpRequest 进行上传
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload', true);
+        xhr.withCredentials = true;
+
+        // 监听上传进度
+        xhr.upload.onprogress = function (event) {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressElement.value = percentComplete;
+                progressLabel.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+            }
+        };
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                document.getElementById('uploadStatus').innerText = 'Upload complete!';
+                progressLabel.textContent = 'Upload complete!';
+                loadFileList(); // 更新文件列表
+            } else {
+                document.getElementById('uploadStatus').innerText = 'Upload failed: ' + xhr.statusText;
+                progressLabel.textContent = 'Error during upload';
+            }
+        };
+
+        xhr.onerror = function () {
+            document.getElementById('uploadStatus').innerText = 'An error occurred during file upload.';
+            progressLabel.textContent = 'Upload error';
+        };
+
+        xhr.send(formData);
+    });
+
     // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('/logout', {
@@ -211,4 +264,5 @@
     document.addEventListener('DOMContentLoaded', getSessionUsername);
 </script>
 </body>
+
 </html>
