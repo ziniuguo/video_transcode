@@ -30,6 +30,16 @@
             color: black;
             font-weight: bold;
         }
+
+        .folder-content {
+            display: none;
+            padding-left: 20px;
+        }
+
+        .folder-title {
+            cursor: pointer;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -92,28 +102,37 @@
                 fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
                 Object.keys(fileLinks).forEach(folderName => {
+                    // 创建文件夹标题并添加点击事件
                     const folderTitle = document.createElement('h4');
                     folderTitle.textContent = folderName;
+                    folderTitle.classList.add('folder-title');
+                    folderTitle.onclick = () => toggleFolder(folderName);
 
-                    fileLinksDiv.appendChild(folderTitle);
+                    // 创建文件夹内容容器
+                    const folderContent = document.createElement('div');
+                    folderContent.id = folderName;
+                    folderContent.classList.add('folder-content');
 
+                    // 为每个文件夹内容添加转码后的不同分辨率视频
                     fileLinks[folderName].forEach(file => {
-                        // 创建视频链接
                         const link = document.createElement('a');
                         link.href = file.fileUrl;
                         link.textContent = file.filename;
                         link.target = '_blank'; // 在新窗口中打开
 
-                        // 添加删除视频按钮
                         const deleteButton = document.createElement('button');
                         deleteButton.textContent = 'Delete Video';
                         deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
                         deleteButton.onclick = () => deleteFile(folderName, file.filename);
 
-                        fileLinksDiv.appendChild(link);
-                        fileLinksDiv.appendChild(deleteButton);
-                        fileLinksDiv.appendChild(document.createElement('br'));
+                        folderContent.appendChild(link);
+                        folderContent.appendChild(deleteButton);
+                        folderContent.appendChild(document.createElement('br'));
                     });
+
+                    // 将文件夹标题和内容添加到页面
+                    fileLinksDiv.appendChild(folderTitle);
+                    fileLinksDiv.appendChild(folderContent);
                 });
             })
             .catch(error => {
@@ -122,6 +141,17 @@
             });
     }
 
+    // 切换文件夹显示/隐藏
+    function toggleFolder(folderId) {
+        const folderContent = document.getElementById(folderId);
+        if (folderContent.style.display === 'none' || folderContent.style.display === '') {
+            folderContent.style.display = 'block';
+        } else {
+            folderContent.style.display = 'none';
+        }
+    }
+
+    // 删除文件
     function deleteFile(folder, filename) {
         const deleteUrl = `/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
 
