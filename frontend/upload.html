@@ -30,16 +30,6 @@
             color: black;
             font-weight: bold;
         }
-
-        .folder-content {
-            display: none;
-            padding-left: 20px;
-        }
-
-        .folder-title {
-            cursor: pointer;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
@@ -53,7 +43,13 @@
         <button type="button" class="btn btn-primary" id="uploadButton">Upload</button>
     </form>
 
-    <!-- Upload and transcode progress bar -->
+    <!-- 文件夹选择器 -->
+    <div class="mb-3">
+        <label for="folderSelect" class="form-label">Select a folder to delete</label>
+        <select id="folderSelect" class="form-control"></select>
+    </div>
+
+    <!-- 上传和转码进度条 -->
     <div id="uploadProgressContainer">
         <progress id="uploadProgress" value="0" max="100"></progress>
         <div id="progressLabel">Waiting...</div>
@@ -61,8 +57,9 @@
 
     <div id="uploadStatus" class="mt-3"></div>
     <div id="fileLinks" class="mt-4"></div>
+    <button type="button" class="btn btn-danger mt-3" id="deleteFolderButton">Delete Selected Folder</button>
 
-    <!-- Logout button -->
+    <!-- 注销按钮 -->
     <button type="button" class="btn btn-warning mt-3" id="logoutButton">Logout</button>
 </div>
 
@@ -70,9 +67,9 @@
 <script>
     let sessionUsername = '';
 
-    // Fetch the current session username
+    // 获取当前会话中的用户名
     function getSessionUsername() {
-        fetch('/getUserInfo', {
+        fetch('http://3.25.114.97:3000/getUserInfo', {
             credentials: 'include'
         })
             .then(response => {
@@ -83,7 +80,8 @@
             })
             .then(data => {
                 sessionUsername = data.username;
-                loadFileList();  // Load file list
+                loadFileList();  // 加载文件列表
+                loadFolderList(); // 加载文件夹列表
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -91,48 +89,32 @@
             });
     }
 
-    // Load the file list for the user
+    // 加载文件列表
     function loadFileList() {
-        fetch(`/browse/${encodeURIComponent(sessionUsername)}`, {
+        fetch('http://3.25.114.97:3000/browse/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
         })
             .then(response => response.json())
-            .then(fileLinks => {
+            .then(fileList => {
                 const fileLinksDiv = document.getElementById('fileLinks');
-                fileLinksDiv.innerHTML = ''; // Clear previous content
+                fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
-                Object.keys(fileLinks).forEach(folderName => {
-                    // Create folder title with toggle event
-                    const folderTitle = document.createElement('h4');
-                    folderTitle.textContent = folderName;
-                    folderTitle.classList.add('folder-title');
-                    folderTitle.onclick = () => toggleFolder(folderName);
+                fileList.forEach(file => {
+                    const link = document.createElement('a');
+                    link.href = file.fileUrl;
+                    link.textContent = file.filename;
+                    link.target = '_blank'; // 打开新窗口查看视频
 
-                    // Create folder content container
-                    const folderContent = document.createElement('div');
-                    folderContent.id = folderName;
-                    folderContent.classList.add('folder-content');
+                    // 删除按钮
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.className = 'btn btn-danger btn-sm';
+                    deleteButton.onclick = () => deleteFile(file.folderName, file.filename);
 
-                    // Add transcoded videos to each folder
-                    fileLinks[folderName].forEach(file => {
-                        const link = document.createElement('a');
-                        link.href = file.fileUrl;
-                        link.textContent = file.filename;
-                        link.target = '_blank'; // Open in a new window
-
-                        const deleteButton = document.createElement('button');
-                        deleteButton.textContent = 'Delete Video';
-                        deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
-                        deleteButton.onclick = () => deleteFile(folderName, file.filename);
-
-                        folderContent.appendChild(link);
-                        folderContent.appendChild(deleteButton);
-                        folderContent.appendChild(document.createElement('br'));
-                    });
-
-                    // Append folder title and content to the page
-                    fileLinksDiv.appendChild(folderTitle);
-                    fileLinksDiv.appendChild(folderContent);
+                    const lineBreak = document.createElement('br');
+                    fileLinksDiv.appendChild(link);
+                    fileLinksDiv.appendChild(deleteButton);
+                    fileLinksDiv.appendChild(lineBreak);
                 });
             })
             .catch(error => {
@@ -141,33 +123,120 @@
             });
     }
 
-    // Toggle folder content visibility
-    function toggleFolder(folderId) {
-        const folderContent = document.getElementById(folderId);
-        if (folderContent.style.display === 'none' || folderContent.style.display === '') {
-            folderContent.style.display = 'block';
-        } else {
-            folderContent.style.display = 'none';
-        }
+    // 加载文件夹列表
+    function loadFolderList() {
+        fetch('http://3.25.114.97:3000/listFolders/' + encodeURIComponent(sessionUsername), {
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(folderList => {
+                const folderSelect = document.getElementById('folderSelect');
+                folderSelect.innerHTML = ''; // 清空之前的选项
+
+                folderList.forEach(folder => {
+                    const option = document.createElement('option');
+                    option.value = folder.folderName;
+                    option.text = folder.folderName;
+                    folderSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('uploadStatus').innerText = 'An error occurred while fetching folder list: ' + error.message;
+            });
     }
 
-    // Delete a file
+    // 上传文件的函数
+    document.getElementById('uploadButton').addEventListener('click', function () {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert('Please choose a file first!');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('video', file);
+
+        document.getElementById('uploadStatus').innerText = 'Uploading...';
+        const progressElement = document.getElementById('uploadProgress');
+        const progressLabel = document.getElementById('progressLabel');
+        progressElement.value = 0;
+        progressLabel.textContent = 'Uploading...';
+
+        // 创建 XMLHttpRequest 进行上传
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'http://3.25.114.97:3000/upload', true);
+
+        // 监听上传进度
+        xhr.upload.onprogress = function (event) {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressElement.value = percentComplete;
+                progressLabel.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+            }
+        };
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                document.getElementById('uploadStatus').innerText = 'Upload complete! Starting transcoding...';
+                progressElement.value = 0; // 重置进度条
+                progressLabel.textContent = 'Transcoding...';
+                startTranscodingProgress();  // 开始监控转码进度
+            } else {
+                document.getElementById('uploadStatus').innerText = 'Upload failed: ' + xhr.statusText;
+                progressLabel.textContent = 'Error during upload';
+            }
+        };
+
+        xhr.onerror = function () {
+            document.getElementById('uploadStatus').innerText = 'An error occurred during file upload.';
+            progressLabel.textContent = 'Upload error';
+        };
+
+        xhr.send(formData);
+    });
+
+    // 开始监控转码进度
+    function startTranscodingProgress() {
+        const progressElement = document.getElementById('uploadProgress');
+        const progressLabel = document.getElementById('progressLabel');
+
+        // 每秒请求一次转码进度
+        const intervalId = setInterval(() => {
+            fetch('http://3.25.114.97:3000/transcodingProgress', { credentials: 'include' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.progress >= 100) {
+                        clearInterval(intervalId); // 停止请求
+                        document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
+                        progressElement.value = 100;
+                        progressLabel.textContent = 'Transcoding complete!';
+                        loadFileList(); // 更新文件列表
+                    } else {
+                        progressElement.value = data.progress;
+                        progressLabel.textContent = `Transcoding... ${Math.round(data.progress)}%`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }, 1000);  // 每秒请求一次
+    }
+
+    // 删除视频文件的函数
     function deleteFile(folder, filename) {
-        const deleteUrl = `/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
+        const deleteUrl = `http://3.25.114.97:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
 
         fetch(deleteUrl, {
             method: 'DELETE',
             credentials: 'include'
         })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Error deleting file');
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                loadFileList(); // Reload file list
+                loadFileList(); // 重新加载文件列表
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -175,9 +244,35 @@
             });
     }
 
-    // Logout user
+    // 删除文件夹的函数
+    document.getElementById('deleteFolderButton').addEventListener('click', function () {
+        const selectedFolder = document.getElementById('folderSelect').value;  // 获取用户选中的文件夹名
+
+        if (!selectedFolder) {
+            alert('Please select a folder to delete.');
+            return;
+        }
+
+        const deleteUrl = `http://3.25.114.97:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(selectedFolder)}`;
+
+        fetch(deleteUrl, {
+            method: 'DELETE',
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadFileList(); // 重新加载文件列表
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the folder: ' + error.message);
+            });
+    });
+
+    // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
-        fetch('/logout', {
+        fetch('http://3.25.114.97:3000/logout', {
             method: 'POST',
             credentials: 'include'
         })
@@ -189,7 +284,7 @@
             })
             .then(data => {
                 alert('Logged out successfully!');
-                window.location.href = '/'; // Redirect to home
+                window.location.href = '/'; // 重定向到首页
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -197,8 +292,10 @@
             });
     });
 
-    // Load session username and file list on page load
-    document.addEventListener('DOMContentLoaded', getSessionUsername);
+    // 页面加载后获取用户名并加载文件列表和文件夹列表
+    document.addEventListener('DOMContentLoaded', function() {
+        getSessionUsername();
+    });
 </script>
 </body>
 </html>
