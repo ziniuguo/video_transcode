@@ -12,6 +12,8 @@ const AWS = require('aws-sdk');
 const bcrypt = require('bcrypt');
 const os = require('os');
 
+// 确保 ffmpeg 路径正确
+ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 或者你机器上的ffmpeg绝对路径
 
 // 配置 AWS S3
 const s3 = new AWS.S3({
@@ -102,11 +104,6 @@ app.use(session({
 
 // 设置静态文件路径
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
-
-// 提供 index.html 页面
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
-});
 
 // 注册路由
 app.post('/register', async (req, res) => {
@@ -230,15 +227,26 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 
             // 转码视频
             const outputPaths = [
-                { path: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
-                { path: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
-                { path: `${videoFolder}360p-${originalFileName}`, resolution: '640x360' }
+                { path: path.join(os.tmpdir(), `720p-${originalFileName}`), resolution: '1280x720' },
+                { path: path.join(os.tmpdir(), `480p-${originalFileName}`), resolution: '854x480' },
+                { path: path.join(os.tmpdir(), `360p-${originalFileName}`), resolution: '640x360' }
             ];
 
             await Promise.all(outputPaths.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
 
+            // 上传转码后的文件
+            await Promise.all(outputPaths.map(output => {
+                const transcodeParams = {
+                    Bucket: process.env.AWS_S3_BUCKET,
+                    Key: `${videoFolder}${path.basename(output.path)}`,
+                    Body: fs.readFileSync(output.path)
+                };
+                return s3.upload(transcodeParams).promise();
+            }));
+
             // 删除本地临时文件
             fs.unlinkSync(tempFilePath);
+            outputPaths.forEach(output => fs.unlinkSync(output.path));
 
             res.status(200).send({ msg: 'File uploaded and transcoded successfully' });
         } catch (uploadError) {
@@ -312,19 +320,26 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     // 在这里从 S3 获取用户的文件列表
     const params = {
         Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: `${username}/`
+        Prefix: `${username}/`,
+        Delimiter: '/'  // 使用 Delimiter 参数来分割文件夹和文件
     };
     s3.listObjectsV2(params, (err, data) => {
         if (err) {
             console.error('Error fetching files from S3:', err);
             return res.status(500).json({ message: 'Error fetching files from S3' });
         }
+
+        const folderLinks = data.CommonPrefixes.map(item => ({
+            folderName: item.Prefix.split('/')[1]  // 获取文件夹名称
+        }));
+
         const fileLinks = data.Contents.map(item => ({
             folderName: item.Key.split('/')[1],
             filename: item.Key.split('/')[2],
             fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
         }));
-        res.json(fileLinks); // 返回 JSON 数据
+
+        res.json({ folders: folderLinks, files: fileLinks }); // 返回文件夹和文件的数据
     });
 });
 
