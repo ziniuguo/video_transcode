@@ -201,20 +201,25 @@ function transcodeVideo(inputPath, outputPath, resolution) {
 
 // 上传并转码的路由，文件存储到 S3，视频元数据存储到 RDS
 app.post('/upload', ensureAuthenticated, (req, res) => {
+    console.log('Upload request received for user:', req.session.user.username);
+
     upload(req, res, async (err) => {
         if (err) {
+            console.error('Error during file upload:', err);
             return res.status(400).send({ msg: err });
         }
         if (!req.file) {
+            console.error('No file selected for upload');
             return res.status(400).send({ msg: 'No file selected!' });
         }
 
         const username = req.session.user.username;
         const originalFileName = req.file.originalname;
+        console.log(`Uploading file: ${originalFileName} for user: ${username}`);
+
         const videoFolder = `${username}/${originalFileName}/`; // 用户名为根目录，文件名为子目录
         const fileKey = `${videoFolder}${originalFileName}`; // 文件的S3路径
 
-        // 上传文件到 S3
         const params = {
             Bucket: process.env.AWS_S3_BUCKET,
             Key: fileKey,
@@ -224,13 +229,16 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 
         try {
             // 上传原始文件到 S3
+            console.log('Uploading original file to S3 with key:', fileKey);
             await s3.upload(params).promise();
+            console.log('File uploaded to S3 successfully');
 
             // 将文件写入本地临时文件夹
             const tempFilePath = path.join(os.tmpdir(), originalFileName);
             fs.writeFileSync(tempFilePath, req.file.buffer);
 
             // 转码视频
+            console.log('Transcoding video:', originalFileName);
             const outputPaths = [
                 { path: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
                 { path: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
@@ -241,22 +249,23 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 
             // 删除本地临时文件
             fs.unlinkSync(tempFilePath);
+            console.log('Transcoding completed and temporary file deleted');
 
             // 将文件信息存储到 RDS
-            const videoId = randomUUID(); // 使用 UUID 作为视频的唯一标识
+            const videoId = randomUUID();
             const videoQuery = "INSERT INTO videos (id, username, filename, s3_key) VALUES (?, ?, ?, ?)";
             db.query(videoQuery, [videoId, username, originalFileName, fileKey], (err) => {
                 if (err) {
                     console.error('Error saving video metadata to RDS:', err);
-                    res.status(500).send({ msg: 'Error saving video metadata to RDS' });
-                } else {
-                    res.status(200).send({
-                        msg: 'File uploaded to S3 and metadata saved in RDS!',
-                        fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`
-                    });
+                    return res.status(500).send({ msg: 'Error saving video metadata to RDS' });
                 }
+                res.status(200).send({
+                    msg: 'File uploaded to S3 and metadata saved in RDS!',
+                    fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`
+                });
             });
         } catch (uploadError) {
+            console.error('Error during upload process:', uploadError);
             res.status(500).send({ msg: 'Error uploading file to S3', error: uploadError.message });
         }
     });
