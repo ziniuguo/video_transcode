@@ -210,54 +210,55 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         }
 
         const username = req.session.user.username;
-        const originalFileName = req.file.originalname;
-        const videoFolder = `${username}/${originalFileName}/`; // 用户名为根目录，文件名为子目录
-        const fileKey = `${videoFolder}${originalFileName}`; // 文件的S3路径
+        const originalFileName = path.parse(req.file.originalname).name;  // 不包括扩展名的文件名
+        const videoFolder = `${username}/${originalFileName}/`;  // 用户文件夹 + 上传文件名为子文件夹
+        const fileKey = `${videoFolder}${originalFileName}${path.extname(req.file.originalname)}`; // S3 路径
 
-        // 上传文件到 S3
-        const params = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Key: fileKey,
-            Body: req.file.buffer,
-            ContentType: req.file.mimetype
-        };
+        // 创建临时本地路径，用于保存不同分辨率的转码文件
+        const tempFolder = path.join(os.tmpdir(), videoFolder);
+        if (!fs.existsSync(tempFolder)) {
+            fs.mkdirSync(tempFolder, { recursive: true });  // 创建目录
+        }
+
+        const tempFilePath = path.join(tempFolder, req.file.originalname); // 临时原始文件路径
+        fs.writeFileSync(tempFilePath, req.file.buffer); // 将上传的文件保存到本地
+
+        // 定义不同分辨率输出文件路径
+        const outputFiles = [
+            { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`) },
+            { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`) },
+            { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`) },
+            { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`) }
+        ];
 
         try {
-            // 上传原始文件到 S3
-            await s3.upload(params).promise();
+            // 并行转码为不同分辨率的文件
+            await Promise.all(outputFiles.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
 
-            // 将文件写入本地临时文件夹
-            const tempFilePath = path.join(os.tmpdir(), originalFileName);
-            fs.writeFileSync(tempFilePath, req.file.buffer);
+            // 上传到 S3
+            for (const outputFile of outputFiles) {
+                const s3Key = `${videoFolder}${path.basename(outputFile.path)}`;
+                const fileContent = fs.readFileSync(outputFile.path);
 
-            // 转码视频
-            const outputPaths = [
-                { path: `${videoFolder}720p-${originalFileName}`, resolution: '1280x720' },
-                { path: `${videoFolder}480p-${originalFileName}`, resolution: '854x480' },
-                { path: `${videoFolder}360p-${originalFileName}`, resolution: '640x360' }
-            ];
+                const params = {
+                    Bucket: process.env.AWS_S3_BUCKET,
+                    Key: s3Key, // S3中的路径
+                    Body: fileContent,
+                    ContentType: 'video/mp4'
+                };
 
-            await Promise.all(outputPaths.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
+                await s3.upload(params).promise();  // 上传文件到 S3
+                console.log(`Uploaded ${s3Key} to S3`);
+            }
 
             // 删除本地临时文件
             fs.unlinkSync(tempFilePath);
+            outputFiles.forEach(output => fs.unlinkSync(output.path));
 
-            // 将文件信息存储到 RDS
-            const videoId = randomUUID(); // 使用 UUID 作为视频的唯一标识
-            const videoQuery = "INSERT INTO videos (id, username, filename, s3_key) VALUES (?, ?, ?, ?)";
-            db.query(videoQuery, [videoId, username, originalFileName, fileKey], (err) => {
-                if (err) {
-                    console.error('Error saving video metadata to RDS:', err);
-                    res.status(500).send({ msg: 'Error saving video metadata to RDS' });
-                } else {
-                    res.status(200).send({
-                        msg: 'File uploaded to S3 and metadata saved in RDS!',
-                        fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`
-                    });
-                }
-            });
+            res.status(200).send({ msg: 'Files uploaded and transcoded successfully!' });
         } catch (uploadError) {
-            res.status(500).send({ msg: 'Error uploading file to S3', error: uploadError.message });
+            console.error('Error during file processing:', uploadError);
+            res.status(500).send({ msg: 'Error during file processing' });
         }
     });
 });
