@@ -172,7 +172,7 @@
         xhr.send(formData);
     });
 
-    // 开始监控转码进度
+    // 开始监控总的转码进度
     function startTranscodingProgress() {
         const progressElement = document.getElementById('uploadProgress');
         const progressLabel = document.getElementById('progressLabel');
@@ -194,7 +194,7 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
+                    console.error('Error fetching transcoding progress:', error);
                 });
         }, 1000);  // 每秒请求一次
     }

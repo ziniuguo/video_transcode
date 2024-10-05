@@ -177,22 +177,29 @@ app.post('/logout', (req, res) => {
     });
 });
 
+let transcodingProgress = {}; // 全局存储每个用户的转码进度
+
 // 视频转码函数
-function transcodeVideo(inputPath, outputPath, resolution) {
+function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex) {
     return new Promise((resolve, reject) => {
         ffmpeg(inputPath)
             .output(outputPath)
             .videoCodec('libx264')
             .size(resolution)
             .on('progress', (progress) => {
-                console.log(`Transcoding progress: ${progress.percent}%`);
+                if (!transcodingProgress[username]) {
+                    transcodingProgress[username] = [0, 0, 0, 0]; // 初始化四个分辨率的进度
+                }
+                transcodingProgress[username][resolutionIndex] = progress.percent; // 存储当前分辨率的进度
+                console.log(`Transcoding progress for ${resolution} of ${username}: ${progress.percent}%`);
             })
             .on('end', () => {
-                console.log(`Transcoding complete: ${outputPath}`);
+                transcodingProgress[username][resolutionIndex] = 100; // 完成后设置为 100%
+                console.log(`Transcoding complete for ${resolution}: ${outputPath}`);
                 resolve();
             })
             .on('error', (err) => {
-                console.error(`Error transcoding file: ${err.message}`);
+                console.error(`Error transcoding file for ${resolution}: ${err.message}`);
                 reject(err);
             })
             .run();
@@ -212,48 +219,29 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         const username = req.session.user.username;
         const originalFileName = path.parse(req.file.originalname).name;  // 不包括扩展名的文件名
         const videoFolder = `${username}/${originalFileName}/`;  // 用户文件夹 + 上传文件名为子文件夹
-        const fileKey = `${videoFolder}${originalFileName}${path.extname(req.file.originalname)}`; // S3 路径
-
-        // 创建临时本地路径，用于保存不同分辨率的转码文件
         const tempFolder = path.join(os.tmpdir(), videoFolder);
+
+        // 创建本地目录
         if (!fs.existsSync(tempFolder)) {
-            fs.mkdirSync(tempFolder, { recursive: true });  // 创建目录
+            fs.mkdirSync(tempFolder, { recursive: true });
         }
 
-        const tempFilePath = path.join(tempFolder, req.file.originalname); // 临时原始文件路径
-        fs.writeFileSync(tempFilePath, req.file.buffer); // 将上传的文件保存到本地
+        const tempFilePath = path.join(tempFolder, req.file.originalname);
+        fs.writeFileSync(tempFilePath, req.file.buffer);
 
         // 定义不同分辨率输出文件路径
         const outputFiles = [
-            { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`) },
-            { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`) },
-            { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`) },
-            { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`) }
+            { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0 },
+            { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1 },
+            { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2 },
+            { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3 }
         ];
 
         try {
-            // 并行转码为不同分辨率的文件
-            await Promise.all(outputFiles.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
-
-            // 上传到 S3
-            for (const outputFile of outputFiles) {
-                const s3Key = `${videoFolder}${path.basename(outputFile.path)}`;
-                const fileContent = fs.readFileSync(outputFile.path);
-
-                const params = {
-                    Bucket: process.env.AWS_S3_BUCKET,
-                    Key: s3Key, // S3中的路径
-                    Body: fileContent,
-                    ContentType: 'video/mp4'
-                };
-
-                await s3.upload(params).promise();  // 上传文件到 S3
-                console.log(`Uploaded ${s3Key} to S3`);
-            }
-
-            // 删除本地临时文件
-            fs.unlinkSync(tempFilePath);
-            outputFiles.forEach(output => fs.unlinkSync(output.path));
+            // 并行处理每个分辨率的转码
+            await Promise.all(outputFiles.map(output =>
+                transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index)
+            ));
 
             res.status(200).send({ msg: 'Files uploaded and transcoded successfully!' });
         } catch (uploadError) {
@@ -286,6 +274,14 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
         }));
         res.json(fileLinks); // 返回 JSON 数据
     });
+});
+
+// 获取转码进度的路由
+app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
+    const username = req.session.user.username;
+    const progressArray = transcodingProgress[username] || [0, 0, 0, 0]; // 获取用户的进度数组，默认为 0
+    const totalProgress = progressArray.reduce((sum, progress) => sum + progress, 0) / 4; // 计算平均进度
+    res.json({ progress: totalProgress });
 });
 
 // 获取当前登录用户信息
