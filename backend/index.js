@@ -179,6 +179,14 @@ app.post('/logout', (req, res) => {
 
 let transcodingProgress = {}; // 全局存储每个用户的转码进度
 
+// 获取转码进度的路由
+app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
+    const username = req.session.user.username;
+    const progressArray = transcodingProgress[username] || [0, 0, 0, 0]; // 获取用户的进度数组，默认为 0
+    const totalProgress = progressArray.reduce((sum, progress) => sum + progress, 0) / 4; // 计算平均进度
+    res.json({ progress: totalProgress });
+});
+
 // 视频转码函数
 function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex) {
     return new Promise((resolve, reject) => {
@@ -206,7 +214,7 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
     });
 }
 
-// 上传并转码的路由，文件存储到 S3，视频元数据存储到 RDS
+// 上传并转码的路由
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
@@ -251,7 +259,7 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
     });
 });
 
-// 浏览用户文件的路由
+// 获取用户文件的路由
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
     if (req.session.user.username !== username) {
@@ -276,12 +284,60 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     });
 });
 
-// 获取转码进度的路由
-app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
-    const username = req.session.user.username;
-    const progressArray = transcodingProgress[username] || [0, 0, 0, 0]; // 获取用户的进度数组，默认为 0
-    const totalProgress = progressArray.reduce((sum, progress) => sum + progress, 0) / 4; // 计算平均进度
-    res.json({ progress: totalProgress });
+// 删除文件的路由
+app.delete('/deleteFile/:username/:folder/:filename', ensureAuthenticated, (req, res) => {
+    const { username, folder, filename } = req.params;
+    const fileKey = `${username}/${folder}/${filename}`; // 文件的S3路径
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: fileKey
+    };
+
+    s3.deleteObject(params, (err, data) => {
+        if (err) {
+            console.error('Error deleting file from S3:', err);
+            return res.status(500).json({ message: 'Error deleting file' });
+        }
+
+        res.json({ message: 'File deleted successfully' });
+    });
+});
+
+// 删除文件夹的路由
+app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
+    const { username, folder } = req.params;
+    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: prefix
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error fetching files from S3' });
+        }
+
+        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
+
+        if (objectsToDelete.length === 0) {
+            return res.status(404).json({ message: 'Folder not found' });
+        }
+
+        const deleteParams = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Delete: { Objects: objectsToDelete }
+        };
+
+        s3.deleteObjects(deleteParams, (deleteErr) => {
+            if (deleteErr) {
+                return res.status(500).json({ message: 'Error deleting folder' });
+            }
+
+            res.json({ message: 'Folder deleted successfully' });
+        });
+    });
 });
 
 // 获取当前登录用户信息
