@@ -180,7 +180,19 @@ app.post('/logout', (req, res) => {
 // 视频转码函数
 const transcodingProgress = {}; // 全局进度记录
 
-function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex) {
+// 实时转码进度的路由
+app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
+    const username = req.session.user.username;
+    if (transcodingProgress[username]) {
+        // 计算整体进度百分比
+        const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
+        res.json({ progress });
+    } else {
+        res.json({ progress: 0 });
+    }
+});
+
+function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex, s3Key) {
     return new Promise((resolve, reject) => {
         ffmpeg(inputPath)
             .output(outputPath)
@@ -196,7 +208,44 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
             .on('end', () => {
                 transcodingProgress[username][resolutionIndex] = 100; // 完成后设置为 100%
                 console.log(`Transcoding complete for ${resolution}: ${outputPath}`);
-                resolve();
+
+                // 上传转码完成的文件到 S3
+                fs.readFile(outputPath, (err, fileData) => {
+                    if (err) {
+                        console.error(`Error reading transcoded file ${outputPath}:`, err);
+                        return reject(err);
+                    }
+
+                    const params = {
+                        Bucket: process.env.AWS_S3_BUCKET,
+                        Key: s3Key,  // S3 路径
+                        Body: fileData
+                    };
+
+                    s3.upload(params, (err, data) => {
+                        if (err) {
+                            console.error('Error uploading transcoded video to S3:', err);
+                            return reject(err);
+                        }
+
+                        console.log(`Uploaded transcoded file to S3: ${data.Location}`);
+
+                        // 将文件信息存储到 MySQL 数据库
+                        const query = `
+                            INSERT INTO videos (id, username, filename, s3_key)
+                            VALUES (?, ?, ?, ?)
+                        `;
+                        db.query(query, [randomUUID(), username, path.basename(outputPath), s3Key], (err) => {
+                            if (err) {
+                                console.error('Error saving video info to database:', err);
+                                return reject(err);
+                            }
+
+                            console.log(`Video info saved to database for ${s3Key}`);
+                            resolve();
+                        });
+                    });
+                });
             })
             .on('error', (err) => {
                 console.error(`Error transcoding file for ${resolution}: ${err.message}`);
@@ -229,18 +278,21 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         const tempFilePath = path.join(tempFolder, req.file.originalname);
         fs.writeFileSync(tempFilePath, req.file.buffer);
 
-        // 定义不同分辨率输出文件路径
+        // 初始化转码进度为 0
+        transcodingProgress[username] = [0, 0, 0, 0];
+
+        // 定义不同分辨率输出文件路径和 S3 存储路径
         const outputFiles = [
-            { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0 },
-            { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1 },
-            { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2 },
-            { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3 }
+            { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0, s3Key: `${username}/${originalFileName}/720p-${originalFileName}.mp4` },
+            { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1, s3Key: `${username}/${originalFileName}/480p-${originalFileName}.mp4` },
+            { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2, s3Key: `${username}/${originalFileName}/360p-${originalFileName}.mp4` },
+            { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3, s3Key: `${username}/${originalFileName}/240p-${originalFileName}.mp4` }
         ];
 
         try {
-            // 并行处理每个分辨率的转码
+            // 并行处理每个分辨率的转码和上传
             await Promise.all(outputFiles.map(output =>
-                transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index)
+                transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index, output.s3Key)
             ));
 
             res.status(200).send({ msg: 'Files uploaded and transcoded successfully!' });
@@ -341,17 +393,6 @@ app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     }
 });
 
-// 实时转码进度的路由
-app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
-    const username = req.session.user.username;
-    if (transcodingProgress[username]) {
-        // 计算整体进度百分比
-        const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
-        res.json({ progress });
-    } else {
-        res.json({ progress: 0 });
-    }
-});
 
 // 设置 multer 存储配置
 const storage = multer.memoryStorage(); // 将文件存储到内存中，稍后上传到 S3
