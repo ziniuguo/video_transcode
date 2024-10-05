@@ -30,6 +30,15 @@
             color: black;
             font-weight: bold;
         }
+
+        .folder-content {
+            margin-left: 20px;
+            display: none; /* 初始状态为收起 */
+        }
+
+        .folder-header {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -92,31 +101,109 @@
                 fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
                 const addedFolders = new Set(); // 用于追踪已添加的文件夹
+                const folderContentMap = {};    // 存储文件夹和文件的映射
 
                 fileList.forEach(file => {
                     const folderName = file.folderName;
                     const filename = file.filename;
 
-                    if (!addedFolders.has(folderName)) {
-                        const folderTitle = document.createElement('h4');
-                        folderTitle.textContent = folderName;
-                        fileLinksDiv.appendChild(folderTitle);
-                        addedFolders.add(folderName);
+                    if (!folderContentMap[folderName]) {
+                        folderContentMap[folderName] = []; // 初始化文件夹
                     }
+                    folderContentMap[folderName].push({
+                        filename: filename,
+                        fileUrl: file.fileUrl
+                    });
+                });
 
-                    // 创建视频链接
-                    const link = document.createElement('a');
-                    link.href = file.fileUrl;
-                    link.textContent = filename;
-                    link.target = '_blank'; // 在新窗口中打开
+                // 展示文件夹和视频文件
+                Object.keys(folderContentMap).forEach(folderName => {
+                    const folderTitle = document.createElement('h4');
+                    folderTitle.classList.add('folder-header');
+                    folderTitle.textContent = folderName;
 
-                    fileLinksDiv.appendChild(link);
-                    fileLinksDiv.appendChild(document.createElement('br'));
+                    // 添加删除文件夹按钮
+                    const deleteFolderButton = document.createElement('button');
+                    deleteFolderButton.textContent = 'Delete Folder';
+                    deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-sm', 'ml-2');
+                    deleteFolderButton.onclick = () => deleteFolder(folderName);
+
+                    folderTitle.appendChild(deleteFolderButton);
+                    fileLinksDiv.appendChild(folderTitle);
+
+                    // 文件夹内容
+                    const folderContentDiv = document.createElement('div');
+                    folderContentDiv.classList.add('folder-content');
+
+                    folderContentMap[folderName].forEach(file => {
+                        const fileDiv = document.createElement('div');
+
+                        // 创建视频链接
+                        const link = document.createElement('a');
+                        link.href = file.fileUrl;
+                        link.textContent = file.filename;
+                        link.target = '_blank'; // 在新窗口中打开
+
+                        // 添加删除视频按钮
+                        const deleteButton = document.createElement('button');
+                        deleteButton.textContent = 'Delete Video';
+                        deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
+                        deleteButton.onclick = () => deleteVideo(folderName, file.filename);
+
+                        fileDiv.appendChild(link);
+                        fileDiv.appendChild(deleteButton);
+                        folderContentDiv.appendChild(fileDiv);
+                    });
+
+                    // 点击文件夹名称展开/收起内容
+                    folderTitle.onclick = () => {
+                        folderContentDiv.style.display = folderContentDiv.style.display === 'none' ? 'block' : 'none';
+                    };
+
+                    fileLinksDiv.appendChild(folderContentDiv);
                 });
             })
             .catch(error => {
                 console.error('Error:', error);
                 document.getElementById('uploadStatus').innerText = 'An error occurred while fetching file list: ' + error.message;
+            });
+    }
+
+    // 删除视频文件的函数
+    function deleteVideo(folderName, filename) {
+        const deleteUrl = `http://13.211.82.62:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}/${encodeURIComponent(filename)}`;
+
+        fetch(deleteUrl, {
+            method: 'DELETE',
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadFileList(); // 重新加载文件列表
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the file: ' + error.message);
+            });
+    }
+
+    // 删除文件夹的函数
+    function deleteFolder(folderName) {
+        const deleteUrl = `http://13.211.82.62:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`;
+
+        fetch(deleteUrl, {
+            method: 'DELETE',
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadFileList(); // 重新加载文件列表
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the folder: ' + error.message);
             });
     }
 
