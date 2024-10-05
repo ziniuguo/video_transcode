@@ -1,12 +1,12 @@
 require('dotenv').config(); // 加载环境变量
 const fs = require('fs');
 const { randomUUID } = require('crypto');
-const express = require("express");
+const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
-const multer = require("multer");
-const path = require("path");
-const ffmpeg = require("fluent-ffmpeg");
+const multer = require('multer');
+const path = require('path');
+const ffmpeg = require('fluent-ffmpeg');
 const mysql = require('mysql2');
 const AWS = require('aws-sdk');
 const bcrypt = require('bcrypt');
@@ -177,17 +177,9 @@ app.post('/logout', (req, res) => {
     });
 });
 
-let transcodingProgress = {}; // 全局存储每个用户的转码进度
-
-// 获取转码进度的路由
-app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
-    const username = req.session.user.username;
-    const progressArray = transcodingProgress[username] || [0, 0, 0, 0]; // 获取用户的进度数组，默认为 0
-    const totalProgress = progressArray.reduce((sum, progress) => sum + progress, 0) / 4; // 计算平均进度
-    res.json({ progress: totalProgress });
-});
-
 // 视频转码函数
+const transcodingProgress = {}; // 全局进度记录
+
 function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex) {
     return new Promise((resolve, reject) => {
         ffmpeg(inputPath)
@@ -346,6 +338,18 @@ app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
         res.json({ username: req.session.user.username });
     } else {
         res.status(401).json({ message: 'User not authenticated' });
+    }
+});
+
+// 实时转码进度的路由
+app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
+    const username = req.session.user.username;
+    if (transcodingProgress[username]) {
+        // 计算整体进度百分比
+        const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
+        res.json({ progress });
+    } else {
+        res.json({ progress: 0 });
     }
 });
 
