@@ -53,7 +53,7 @@
         <button type="button" class="btn btn-primary" id="uploadButton">Upload</button>
     </form>
 
-    <!-- 上传和转码进度条 -->
+    <!-- Upload and transcode progress bar -->
     <div id="uploadProgressContainer">
         <progress id="uploadProgress" value="0" max="100"></progress>
         <div id="progressLabel">Waiting...</div>
@@ -62,7 +62,7 @@
     <div id="uploadStatus" class="mt-3"></div>
     <div id="fileLinks" class="mt-4"></div>
 
-    <!-- 注销按钮 -->
+    <!-- Logout button -->
     <button type="button" class="btn btn-warning mt-3" id="logoutButton">Logout</button>
 </div>
 
@@ -70,7 +70,7 @@
 <script>
     let sessionUsername = '';
 
-    // 获取当前会话中的用户名
+    // Fetch the current session username
     function getSessionUsername() {
         fetch('/getUserInfo', {
             credentials: 'include'
@@ -83,7 +83,7 @@
             })
             .then(data => {
                 sessionUsername = data.username;
-                loadFileList();  // 加载文件列表
+                loadFileList();  // Load file list
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -91,7 +91,7 @@
             });
     }
 
-    // 加载文件列表
+    // Load the file list for the user
     function loadFileList() {
         fetch(`/browse/${encodeURIComponent(sessionUsername)}`, {
             credentials: 'include'
@@ -99,26 +99,26 @@
             .then(response => response.json())
             .then(fileLinks => {
                 const fileLinksDiv = document.getElementById('fileLinks');
-                fileLinksDiv.innerHTML = ''; // 清空之前的内容
+                fileLinksDiv.innerHTML = ''; // Clear previous content
 
                 Object.keys(fileLinks).forEach(folderName => {
-                    // 创建文件夹标题并添加点击事件
+                    // Create folder title with toggle event
                     const folderTitle = document.createElement('h4');
                     folderTitle.textContent = folderName;
                     folderTitle.classList.add('folder-title');
                     folderTitle.onclick = () => toggleFolder(folderName);
 
-                    // 创建文件夹内容容器
+                    // Create folder content container
                     const folderContent = document.createElement('div');
                     folderContent.id = folderName;
                     folderContent.classList.add('folder-content');
 
-                    // 为每个文件夹内容添加转码后的不同分辨率视频
+                    // Add transcoded videos to each folder
                     fileLinks[folderName].forEach(file => {
                         const link = document.createElement('a');
                         link.href = file.fileUrl;
                         link.textContent = file.filename;
-                        link.target = '_blank'; // 在新窗口中打开
+                        link.target = '_blank'; // Open in a new window
 
                         const deleteButton = document.createElement('button');
                         deleteButton.textContent = 'Delete Video';
@@ -130,7 +130,7 @@
                         folderContent.appendChild(document.createElement('br'));
                     });
 
-                    // 将文件夹标题和内容添加到页面
+                    // Append folder title and content to the page
                     fileLinksDiv.appendChild(folderTitle);
                     fileLinksDiv.appendChild(folderContent);
                 });
@@ -141,7 +141,7 @@
             });
     }
 
-    // 切换文件夹显示/隐藏
+    // Toggle folder content visibility
     function toggleFolder(folderId) {
         const folderContent = document.getElementById(folderId);
         if (folderContent.style.display === 'none' || folderContent.style.display === '') {
@@ -151,7 +151,7 @@
         }
     }
 
-    // 删除文件
+    // Delete a file
     function deleteFile(folder, filename) {
         const deleteUrl = `/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
 
@@ -167,7 +167,7 @@
             })
             .then(data => {
                 alert(data.message);
-                loadFileList(); // 重新加载文件列表
+                loadFileList(); // Reload file list
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -175,7 +175,7 @@
             });
     }
 
-    // 注销用户
+    // Logout user
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('/logout', {
             method: 'POST',
@@ -189,7 +189,7 @@
             })
             .then(data => {
                 alert('Logged out successfully!');
-                window.location.href = '/'; // 重定向到首页
+                window.location.href = '/'; // Redirect to home
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -197,7 +197,7 @@
             });
     });
 
-    // 页面加载后获取用户名并加载文件列表
+    // Load session username and file list on page load
     document.addEventListener('DOMContentLoaded', getSessionUsername);
 </script>
 </body>

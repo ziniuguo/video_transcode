@@ -131,15 +131,6 @@ app.post('/logout', (req, res) => {
     });
 });
 
-// Get user info route
-app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
-    if (req.session.user) {
-        res.json({ username: req.session.user.username });
-    } else {
-        res.status(401).json({ message: 'User not authenticated' });
-    }
-});
-
 // Upload route
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
