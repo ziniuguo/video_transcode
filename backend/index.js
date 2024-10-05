@@ -1,20 +1,21 @@
-require('dotenv').config(); // 加载环境变量
+require('dotenv').config();
 const fs = require('fs');
-const path = require('path');
+const { randomUUID } = require('crypto');
 const express = require("express");
 const cors = require('cors');
 const session = require('express-session');
 const multer = require("multer");
+const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 const mysql = require('mysql2');
 const AWS = require('aws-sdk');
 const bcrypt = require('bcrypt');
 const os = require('os');
 
-// 确保 ffmpeg 路径正确
+// Configure ffmpeg path
 ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
 
-// 配置 AWS S3
+// AWS S3 Configuration
 const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -22,7 +23,7 @@ const s3 = new AWS.S3({
     region: process.env.AWS_REGION
 });
 
-// MySQL 连接配置
+// MySQL connection configuration
 const db = mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
@@ -35,7 +36,7 @@ const db = mysql.createConnection({
     }
 });
 
-// 测试数据库连接
+// Test MySQL connection
 db.connect((err) => {
     if (err) {
         console.error('Error connecting to MySQL database:', err);
@@ -44,31 +45,93 @@ db.connect((err) => {
     console.log('Connected to MySQL database on AWS RDS');
 });
 
-// 创建 Express 应用
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 设置会话管理
+// Session management
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your_secret_key',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        maxAge: 10 * 60 * 1000 // 10 分钟
+        maxAge: 10 * 60 * 1000 // 10 minutes
     }
 }));
 
-// 设置 multer 存储配置
-const storage = multer.memoryStorage(); // 将文件存储到内存中，稍后上传到 S3
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 1073741824 } // 1 GB
-}).single('video');
+// Set static file path
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
-// 上传并转码的路由，文件存储到 S3，视频元数据存储到 RDS
+// Registration route
+app.post('/register', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const query = "INSERT INTO users (username, password) VALUES (?, ?)";
+        db.query(query, [username, hashedPassword], (err) => {
+            if (err) {
+                if (err.code === 'ER_DUP_ENTRY') {
+                    return res.status(409).json({ message: 'Username already exists' });
+                } else {
+                    return res.status(500).json({ message: 'Database error' });
+                }
+            }
+
+            // Create S3 folder for user
+            const params = {
+                Bucket: process.env.AWS_S3_BUCKET,
+                Key: `${username}/`
+            };
+
+            s3.putObject(params, (s3Err) => {
+                if (s3Err) {
+                    console.error('Error creating folder in S3:', s3Err);
+                    return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
+                } else {
+                    console.log(`S3 folder created for user: ${username}`);
+                    return res.status(201).json({ message: 'User registered successfully and S3 folder created' });
+                }
+            });
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Login route
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    const query = "SELECT * FROM users WHERE username = ?";
+    db.query(query, [username], async (err, results) => {
+        if (err) {
+            return res.status(500).json({ message: 'Database error' });
+        } else if (results.length > 0) {
+            const match = await bcrypt.compare(password, results[0].password);
+            if (match) {
+                req.session.user = { username: results[0].username };
+                return res.status(200).json({ message: 'Login successful' });
+            } else {
+                return res.status(401).json({ message: 'Login failed' });
+            }
+        } else {
+            return res.status(401).json({ message: 'Login failed' });
+        }
+    });
+});
+
+// Logout route
+app.post('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).send('Logout failed');
+        }
+        res.send('Logout successful');
+    });
+});
+
+// Upload and transcode route
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
@@ -80,10 +143,10 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
 
         const username = req.session.user.username;
         const originalFileName = req.file.originalname;
-        const videoFolder = `${username}/${originalFileName}/`; // 文件夹为用户名/上传文件名
-        const fileKey = `${videoFolder}${originalFileName}`; // 原始文件的S3路径
+        const videoFolder = `${username}/${originalFileName}/`;
+        const fileKey = `${videoFolder}${originalFileName}`;
 
-        // 上传文件到 S3
+        // Upload original file to S3
         const params = {
             Bucket: process.env.AWS_S3_BUCKET,
             Key: fileKey,
@@ -92,25 +155,27 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         };
 
         try {
-            // 上传原始文件到 S3
             await s3.upload(params).promise();
 
-            // 将文件写入本地临时文件夹
+            // Write file to local temp directory
             const tempFilePath = path.join(os.tmpdir(), originalFileName);
             fs.writeFileSync(tempFilePath, req.file.buffer);
 
-            // 定义不同分辨率的输出路径
-            const outputPaths = [
-                { path: path.join(os.tmpdir(), `1080p-${originalFileName}`), resolution: '1920x1080' },
-                { path: path.join(os.tmpdir(), `720p-${originalFileName}`), resolution: '1280x720' },
-                { path: path.join(os.tmpdir(), `480p-${originalFileName}`), resolution: '854x480' },
-                { path: path.join(os.tmpdir(), `360p-${originalFileName}`), resolution: '640x360' }
+            // Transcode video
+            const resolutions = [
+                { suffix: '1080p', resolution: '1920x1080' },
+                { suffix: '720p', resolution: '1280x720' },
+                { suffix: '480p', resolution: '854x480' },
+                { suffix: '360p', resolution: '640x360' }
             ];
 
-            // 转码视频文件
+            const outputPaths = resolutions.map(res => {
+                return { path: path.join(os.tmpdir(), `${res.suffix}-${originalFileName}`), resolution: res.resolution };
+            });
+
             await Promise.all(outputPaths.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
 
-            // 上传转码后的文件到 S3
+            // Upload transcoded files to S3
             await Promise.all(outputPaths.map(output => {
                 const transcodeParams = {
                     Bucket: process.env.AWS_S3_BUCKET,
@@ -120,7 +185,7 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
                 return s3.upload(transcodeParams).promise();
             }));
 
-            // 删除本地临时文件
+            // Clean up local temp files
             fs.unlinkSync(tempFilePath);
             outputPaths.forEach(output => fs.unlinkSync(output.path));
 
@@ -131,38 +196,51 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
     });
 });
 
-// 视频转码函数
-function transcodeVideo(inputPath, outputPath, resolution) {
-    return new Promise((resolve, reject) => {
-        ffmpeg(inputPath)
-            .output(outputPath)
-            .videoCodec('libx264')
-            .size(resolution)
-            .on('progress', (progress) => {
-                console.log(`Transcoding progress: ${progress.percent}%`);
-            })
-            .on('end', () => {
-                console.log(`Transcoding complete: ${outputPath}`);
-                resolve();
-            })
-            .on('error', (err) => {
-                console.error(`Error transcoding file: ${err.message}`);
-                reject(err);
-            })
-            .run();
+// Browse user files route
+app.get('/browse/:username', ensureAuthenticated, (req, res) => {
+    const { username } = req.params;
+    if (req.session.user.username !== username) {
+        return res.status(403).json({ message: 'You are not authorized to browse this user's files.' });
+        }
+        const params = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Prefix: `${username}/`
+        };
+        s3.listObjectsV2(params, (err, data) => {
+            if (err) {
+                console.error('Error fetching files from S3:', err);
+                return res.status(500).json({ message: 'Error fetching files from S3' });
+            }
+
+            const fileLinks = {};
+            data.Contents.forEach(item => {
+                const keyParts = item.Key.split('/');
+                const folderName = keyParts[1];
+                const filename = keyParts[2];
+                if (!fileLinks[folderName]) {
+                    fileLinks[folderName] = [];
+                }
+                if (filename) {
+                    fileLinks[folderName].push({
+                        filename: filename,
+                        fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
+                    });
+                }
+            });
+            res.json(fileLinks);
+        });
     });
-}
 
-// 确保用户已认证的中间件
-function ensureAuthenticated(req, res, next) {
-    if (req.session.user) {
-        next();
-    } else {
-        res.status(401).json({ message: 'Please login to access this page' });
+// Middleware to ensure user is authenticated
+    function ensureAuthenticated(req, res, next) {
+        if (req.session.user) {
+            next();
+        } else {
+            res.status(401).json({ message: 'Please login to access this page' });
+        }
     }
-}
 
-// 启动服务器并监听 0.0.0.0
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server started on port ${PORT}, listening on 0.0.0.0`);
-});
+// Start server
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server started on port ${PORT}, listening on 0.0.0.0`);
+    });
