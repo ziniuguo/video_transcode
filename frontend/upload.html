@@ -233,7 +233,7 @@
         // 监听上传进度
         xhr.upload.onprogress = function (event) {
             if (event.lengthComputable) {
-                const percentComplete = (event.loaded / event.total) * 100;
+                const percentComplete = (event.loaded / event.total) * 50; // 上传部分占50%
                 progressElement.value = percentComplete;
                 progressLabel.textContent = `Uploading... ${Math.round(percentComplete)}%`;
             }
@@ -242,8 +242,8 @@
         xhr.onload = function () {
             if (xhr.status === 200) {
                 document.getElementById('uploadStatus').innerText = 'Upload complete! Starting transcoding...';
-                progressElement.value = 0; // 重置进度条
-                progressLabel.textContent = 'Transcoding...';
+                progressElement.value = 50; // 上传完成时，进度设置为50%
+                progressLabel.textContent = 'Transcoding... 50%';
                 startTranscodingProgress();  // 开始监控转码进度
             } else {
                 document.getElementById('uploadStatus').innerText = 'Upload failed: ' + xhr.statusText;
@@ -251,42 +251,36 @@
             }
         };
 
-        xhr.onerror = function () {
-            document.getElementById('uploadStatus').innerText = 'An error occurred during file upload.';
-            progressLabel.textContent = 'Upload error';
-        };
+        // 开始监控总的转码进度
+        function startTranscodingProgress() {
+            const progressElement = document.getElementById('uploadProgress');
+            const progressLabel = document.getElementById('progressLabel');
 
-        xhr.send(formData);
-    });
+            // 每秒请求一次转码进度
+            const intervalId = setInterval(() => {
+                fetch('http://13.211.82.62:3000/transcodingProgress', { credentials: 'include' })
+                    .then(response => response.json())
+                    .then(data => {
+                        const transcodingProgress = data.progress * 0.5; // 转码部分占50%
+                        const totalProgress = 50 + transcodingProgress; // 加上已完成的50%上传部分
+                        progressElement.value = totalProgress;
+                        progressLabel.textContent = `Transcoding... ${Math.round(totalProgress)}%`;
 
-    // 开始监控总的转码进度
-    function startTranscodingProgress() {
-        const progressElement = document.getElementById('uploadProgress');
-        const progressLabel = document.getElementById('progressLabel');
+                        if (totalProgress >= 100) {
+                            clearInterval(intervalId); // 停止请求
+                            document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
+                            progressElement.value = 100;
+                            progressLabel.textContent = 'Process complete!';
+                            loadFileList(); // 更新文件列表
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching transcoding progress:', error);
+                    });
+            }, 1000);  // 每秒请求一次
+        }
 
-        // 每秒请求一次转码进度
-        const intervalId = setInterval(() => {
-            fetch('http://13.211.82.62:3000/transcodingProgress', { credentials: 'include' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.progress >= 100) {
-                        clearInterval(intervalId); // 停止请求
-                        document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
-                        progressElement.value = 100;
-                        progressLabel.textContent = 'Transcoding complete!';
-                        loadFileList(); // 更新文件列表
-                    } else {
-                        progressElement.value = data.progress;
-                        progressLabel.textContent = `Transcoding... ${Math.round(data.progress)}%`;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching transcoding progress:', error);
-                });
-        }, 1000);  // 每秒请求一次
-    }
-
-    // 注销用户
+        // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('http://13.211.82.62:3000/logout', {
             method: 'POST',
