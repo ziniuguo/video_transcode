@@ -122,7 +122,6 @@
             });
     }
 
-    // 删除文件
     function deleteFile(folder, filename) {
         const deleteUrl = `/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
 
@@ -130,7 +129,12 @@
             method: 'DELETE',
             credentials: 'include'
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error deleting file');
+                }
+                return response.json();
+            })
             .then(data => {
                 alert(data.message);
                 loadFileList(); // 重新加载文件列表
@@ -140,6 +144,7 @@
                 alert('An error occurred while deleting the file: ' + error.message);
             });
     }
+
 
     // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
