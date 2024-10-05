@@ -262,62 +262,6 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
     });
 });
 
-// 删除文件的路由
-app.delete('/deleteFile/:username/:folder/:filename', ensureAuthenticated, (req, res) => {
-    const { username, folder, filename } = req.params;
-    const fileKey = `${username}/${folder}/${filename}`; // 文件的S3路径
-
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Key: fileKey
-    };
-
-    s3.deleteObject(params, (err, data) => {
-        if (err) {
-            console.error('Error deleting file from S3:', err);
-            return res.status(500).json({ message: 'Error deleting file' });
-        }
-
-        res.json({ message: 'File deleted successfully' });
-    });
-});
-
-// 删除文件夹的路由
-app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
-    const { username, folder } = req.params;
-    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
-
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: prefix
-    };
-
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error fetching files from S3' });
-        }
-
-        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
-
-        if (objectsToDelete.length === 0) {
-            return res.status(404).json({ message: 'Folder not found' });
-        }
-
-        const deleteParams = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Delete: { Objects: objectsToDelete }
-        };
-
-        s3.deleteObjects(deleteParams, (deleteErr) => {
-            if (deleteErr) {
-                return res.status(500).json({ message: 'Error deleting folder' });
-            }
-
-            res.json({ message: 'Folder deleted successfully' });
-        });
-    });
-});
-
 // 浏览用户文件的路由
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
