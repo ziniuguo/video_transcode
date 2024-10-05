@@ -203,11 +203,20 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
                     transcodingProgress[username] = [0, 0, 0, 0]; // 初始化四个分辨率的进度
                 }
                 transcodingProgress[username][resolutionIndex] = progress.percent; // 存储当前分辨率的进度
+
+                // 计算总的转码进度
+                const totalProgress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
+
                 console.log(`Transcoding progress for ${resolution} of ${username}: ${progress.percent}%`);
+                console.log(`Overall transcoding progress for ${username}: ${totalProgress}%`); // 在控制台显示总进度
             })
             .on('end', () => {
                 transcodingProgress[username][resolutionIndex] = 100; // 完成后设置为 100%
+
+                // 计算并显示最终的总进度（100%）
+                const totalProgress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
                 console.log(`Transcoding complete for ${resolution}: ${outputPath}`);
+                console.log(`Final overall transcoding progress for ${username}: ${totalProgress}%`); // 在控制台显示最终的总进度
 
                 // 上传转码完成的文件到 S3
                 fs.readFile(outputPath, (err, fileData) => {
