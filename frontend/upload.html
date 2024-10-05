@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -43,7 +42,6 @@
         }
     </style>
 </head>
-
 <body>
 <div class="container mt-5">
     <h2>File Upload</h2>
@@ -74,7 +72,7 @@
 
     // 获取当前会话中的用户名
     function getSessionUsername() {
-        fetch('/getUserInfo', {
+        fetch('http://13.211.82.62:3000/getUserInfo', {
             credentials: 'include'
         })
             .then(response => {
@@ -95,7 +93,7 @@
 
     // 加载文件列表
     function loadFileList() {
-        fetch(`/browse/${encodeURIComponent(sessionUsername)}`, {
+        fetch(`http://13.211.82.62:3000/browse/${encodeURIComponent(sessionUsername)}`, {
             credentials: 'include'
         })
             .then(response => response.json())
@@ -165,7 +163,7 @@
 
     // 删除文件
     function deleteFile(folder, filename) {
-        const deleteUrl = `/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
+        const deleteUrl = `http://13.211.82.62:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
 
         fetch(deleteUrl, {
             method: 'DELETE',
@@ -200,47 +198,40 @@
         const formData = new FormData();
         formData.append('video', file);
 
+        document.getElementById('uploadStatus').innerText = 'Uploading...';
         const progressElement = document.getElementById('uploadProgress');
         const progressLabel = document.getElementById('progressLabel');
         progressElement.value = 0;
         progressLabel.textContent = 'Uploading...';
 
-        // 创建 XMLHttpRequest 进行上传
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/upload', true);
-        xhr.withCredentials = true;
-
-        // 监听上传进度
-        xhr.upload.onprogress = function (event) {
-            if (event.lengthComputable) {
-                const percentComplete = (event.loaded / event.total) * 100;
-                progressElement.value = percentComplete;
-                progressLabel.textContent = `Uploading... ${Math.round(percentComplete)}%`;
-            }
-        };
-
-        xhr.onload = function () {
-            if (xhr.status === 200) {
+        // 使用完整的后端地址
+        fetch('http://13.211.82.62:3000/upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+                return response.json();
+            })
+            .then(data => {
                 document.getElementById('uploadStatus').innerText = 'Upload complete!';
+                progressElement.value = 100;
                 progressLabel.textContent = 'Upload complete!';
                 loadFileList(); // 更新文件列表
-            } else {
-                document.getElementById('uploadStatus').innerText = 'Upload failed: ' + xhr.statusText;
-                progressLabel.textContent = 'Error during upload';
-            }
-        };
-
-        xhr.onerror = function () {
-            document.getElementById('uploadStatus').innerText = 'An error occurred during file upload.';
-            progressLabel.textContent = 'Upload error';
-        };
-
-        xhr.send(formData);
+            })
+            .catch(error => {
+                document.getElementById('uploadStatus').innerText = 'An error occurred during file upload: ' + error.message;
+                progressLabel.textContent = 'Upload error';
+                console.error('Error:', error);
+            });
     });
 
     // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
-        fetch('/logout', {
+        fetch('http://13.211.82.62:3000/logout', {
             method: 'POST',
             credentials: 'include'
         })
@@ -264,5 +255,4 @@
     document.addEventListener('DOMContentLoaded', getSessionUsername);
 </script>
 </body>
-
 </html>
