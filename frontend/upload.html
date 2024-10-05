@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Upload</title>
-    <link href="/assets/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <style>
         #uploadProgressContainer {
             width: 100%;
@@ -30,16 +30,6 @@
             color: black;
             font-weight: bold;
         }
-
-        .folder-content {
-            display: none;
-            padding-left: 20px;
-        }
-
-        .folder-title {
-            cursor: pointer;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
@@ -53,139 +43,16 @@
         <button type="button" class="btn btn-primary" id="uploadButton">Upload</button>
     </form>
 
-    <!-- 上传和转码进度条 -->
     <div id="uploadProgressContainer">
         <progress id="uploadProgress" value="0" max="100"></progress>
         <div id="progressLabel">Waiting...</div>
     </div>
 
     <div id="uploadStatus" class="mt-3"></div>
-    <div id="fileLinks" class="mt-4"></div>
-
-    <!-- 注销按钮 -->
     <button type="button" class="btn btn-warning mt-3" id="logoutButton">Logout</button>
 </div>
 
-<script src="/assets/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    let sessionUsername = '';
-
-    // 获取当前会话中的用户名
-    function getSessionUsername() {
-        fetch('http://13.211.82.62:3000/getUserInfo', {
-            credentials: 'include'
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to fetch user info');
-                }
-                return response.json();
-            })
-            .then(data => {
-                sessionUsername = data.username;
-                loadFileList();  // 加载文件列表
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('uploadStatus').innerText = 'An error occurred while fetching user info: ' + error.message;
-            });
-    }
-
-    // 加载文件列表
-    function loadFileList() {
-        fetch(`http://13.211.82.62:3000/browse/${encodeURIComponent(sessionUsername)}`, {
-            credentials: 'include'
-        })
-            .then(response => response.json())
-            .then(fileLinks => {
-                const fileLinksDiv = document.getElementById('fileLinks');
-                fileLinksDiv.innerHTML = ''; // 清空之前的内容
-
-                const folders = {};
-
-                fileLinks.forEach(file => {
-                    const folderName = file.folderName;
-                    if (!folders[folderName]) {
-                        folders[folderName] = [];
-                    }
-                    folders[folderName].push(file);
-                });
-
-                Object.keys(folders).forEach(folderName => {
-                    // 创建文件夹标题并添加点击事件
-                    const folderTitle = document.createElement('h4');
-                    folderTitle.textContent = folderName;
-                    folderTitle.classList.add('folder-title');
-                    folderTitle.onclick = () => toggleFolder(folderName);
-
-                    // 创建文件夹内容容器
-                    const folderContent = document.createElement('div');
-                    folderContent.id = folderName;
-                    folderContent.classList.add('folder-content');
-
-                    // 为每个文件夹内容添加转码后的不同分辨率视频
-                    folders[folderName].forEach(file => {
-                        const link = document.createElement('a');
-                        link.href = file.fileUrl;
-                        link.textContent = file.filename;
-                        link.target = '_blank'; // 在新窗口中打开
-
-                        const deleteButton = document.createElement('button');
-                        deleteButton.textContent = 'Delete Video';
-                        deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
-                        deleteButton.onclick = () => deleteFile(folderName, file.filename);
-
-                        folderContent.appendChild(link);
-                        folderContent.appendChild(deleteButton);
-                        folderContent.appendChild(document.createElement('br'));
-                    });
-
-                    // 将文件夹标题和内容添加到页面
-                    fileLinksDiv.appendChild(folderTitle);
-                    fileLinksDiv.appendChild(folderContent);
-                });
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('uploadStatus').innerText = 'An error occurred while fetching file list: ' + error.message;
-            });
-    }
-
-    // 切换文件夹显示/隐藏
-    function toggleFolder(folderId) {
-        const folderContent = document.getElementById(folderId);
-        if (folderContent.style.display === 'none' || folderContent.style.display === '') {
-            folderContent.style.display = 'block';
-        } else {
-            folderContent.style.display = 'none';
-        }
-    }
-
-    // 删除文件
-    function deleteFile(folder, filename) {
-        const deleteUrl = `http://13.211.82.62:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
-
-        fetch(deleteUrl, {
-            method: 'DELETE',
-            credentials: 'include'
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Error deleting file');
-                }
-                return response.json();
-            })
-            .then(data => {
-                alert(data.message);
-                loadFileList(); // 重新加载文件列表
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while deleting the file: ' + error.message);
-            });
-    }
-
-    // 上传文件的函数
     document.getElementById('uploadButton').addEventListener('click', function () {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
@@ -204,32 +71,37 @@
         progressElement.value = 0;
         progressLabel.textContent = 'Uploading...';
 
-        // 使用完整的后端地址
-        fetch('http://13.211.82.62:3000/upload', {
-            method: 'POST',
-            credentials: 'include',
-            body: formData
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Upload failed');
-                }
-                return response.json();
-            })
-            .then(data => {
-                document.getElementById('uploadStatus').innerText = 'Upload complete!';
-                progressElement.value = 100;
-                progressLabel.textContent = 'Upload complete!';
-                loadFileList(); // 更新文件列表
-            })
-            .catch(error => {
-                document.getElementById('uploadStatus').innerText = 'An error occurred during file upload: ' + error.message;
-                progressLabel.textContent = 'Upload error';
-                console.error('Error:', error);
-            });
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'http://13.211.82.62:3000/upload', true);
+        xhr.withCredentials = true;
+
+        xhr.upload.onprogress = function (event) {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressElement.value = percentComplete;
+                progressLabel.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+            }
+        };
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                document.getElementById('uploadStatus').innerText = 'Upload complete! Starting transcoding...';
+                progressElement.value = 0;
+                progressLabel.textContent = 'Transcoding...';
+            } else {
+                document.getElementById('uploadStatus').innerText = 'Upload failed: ' + xhr.statusText;
+                progressLabel.textContent = 'Error during upload';
+            }
+        };
+
+        xhr.onerror = function () {
+            document.getElementById('uploadStatus').innerText = 'An error occurred during file upload.';
+            progressLabel.textContent = 'Upload error';
+        };
+
+        xhr.send(formData);
     });
 
-    // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('http://13.211.82.62:3000/logout', {
             method: 'POST',
@@ -243,16 +115,13 @@
             })
             .then(data => {
                 alert('Logged out successfully!');
-                window.location.href = '/'; // 重定向到首页
+                window.location.href = '/';
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while logging out: ' + error.message);
             });
     });
-
-    // 页面加载后获取用户名并加载文件列表
-    document.addEventListener('DOMContentLoaded', getSessionUsername);
 </script>
 </body>
 </html>
