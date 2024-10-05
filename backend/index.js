@@ -217,6 +217,7 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
             .videoCodec('libx264')
             .size(resolution)
             .on('progress', (progress) => {
+                console.log(`Progress for ${username}: ${progress.percent}`);
                 if (!transcodingProgress[username]) {
                     transcodingProgress[username] = [0, 0, 0, 0]; // 初始化四个分辨率的进度
                 }
