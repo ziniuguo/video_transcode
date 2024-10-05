@@ -61,7 +61,13 @@
 <script>
     let sessionUsername = '';
 
-    // 获取当前会话中的用户名
+    // 页面加载后执行，确保 DOM 元素已加载完毕再执行其他逻辑
+    document.addEventListener('DOMContentLoaded', function() {
+        // 获取当前会话中的用户名
+        getSessionUsername();
+    });
+
+    // 获取当前用户会话信息
     function getSessionUsername() {
         fetch('http://3.25.114.97:3000/getUserInfo', {
             credentials: 'include'
@@ -74,8 +80,9 @@
             })
             .then(data => {
                 sessionUsername = data.username;
-                loadFileList();  // 加载文件列表
-                loadFolderList(); // 加载文件夹列表
+                // 用户名获取成功后，加载文件列表和文件夹列表
+                loadFileList();
+                loadFolderList();
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -141,7 +148,7 @@
 
     // 加载文件夹列表
     function loadFolderList() {
-        fetch('http://3.25.114.97:3000/listFolders/' + encodeURIComponent(sessionUsername), {
+        fetch(`http://3.25.114.97:3000/listFolders/${encodeURIComponent(sessionUsername)}`, {
             credentials: 'include'
         })
             .then(response => response.json())
@@ -301,11 +308,6 @@
                 console.error('Error:', error);
                 alert('An error occurred while logging out: ' + error.message);
             });
-    });
-
-    // 页面加载后获取用户名并加载文件列表和文件夹列表
-    document.addEventListener('DOMContentLoaded', function() {
-        getSessionUsername();
     });
 </script>
 </body>
