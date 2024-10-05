@@ -45,6 +45,38 @@ db.connect((err) => {
     console.log('Connected to MySQL database on AWS RDS');
 });
 
+// 确保 users 表存在
+const createUsersTable = `
+CREATE TABLE IF NOT EXISTS users (
+    username VARCHAR(255) PRIMARY KEY,
+    password VARCHAR(255) NOT NULL
+)`;
+db.query(createUsersTable, (err) => {
+    if (err) {
+        console.error('Error creating users table:', err);
+    } else {
+        console.log('Users table ensured.');
+    }
+});
+
+// 确保 videos 表存在
+const createVideosTable = `
+CREATE TABLE IF NOT EXISTS videos (
+    id VARCHAR(255) PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    s3_key VARCHAR(255) NOT NULL,
+    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users(username)
+)`;
+db.query(createVideosTable, (err) => {
+    if (err) {
+        console.error('Error creating videos table:', err);
+    } else {
+        console.log('Videos table ensured.');
+    }
+});
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(cors());
@@ -131,6 +163,89 @@ app.post('/logout', (req, res) => {
     });
 });
 
+// 视频转码函数
+function transcodeVideo(inputPath, outputPath, resolution) {
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+            .output(outputPath)
+            .videoCodec('libx264')
+            .size(resolution)
+            .on('progress', (progress) => {
+                console.log(`Transcoding progress: ${progress.percent}%`);
+            })
+            .on('end', () => {
+                console.log(`Transcoding complete: ${outputPath}`);
+                resolve();
+            })
+            .on('error', (err) => {
+                console.error(`Error transcoding file: ${err.message}`);
+                reject(err);
+            })
+            .run();
+    });
+}
+
+// 上传并转码的路由，文件存储到 S3，视频元数据存储到 RDS
+app.post('/upload', ensureAuthenticated, (req, res) => {
+    upload(req, res, async (err) => {
+        if (err) {
+            return res.status(400).send({ msg: err });
+        }
+        if (!req.file) {
+            return res.status(400).send({ msg: 'No file selected!' });
+        }
+
+        const username = req.session.user.username;
+        const originalFileName = req.file.originalname;
+        const videoFolder = `${username}/${originalFileName}/`; // 文件名为子目录
+        const fileKey = `${videoFolder}${originalFileName}`; // 原始文件的S3路径
+
+        // 上传文件到 S3
+        const params = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Key: fileKey,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype
+        };
+
+        try {
+            // 上传原始文件到 S3
+            await s3.upload(params).promise();
+
+            // 将文件写入本地临时文件夹
+            const tempFilePath = path.join(os.tmpdir(), originalFileName);
+            fs.writeFileSync(tempFilePath, req.file.buffer);
+
+            // 转码视频
+            const outputPaths = [
+                { path: path.join(os.tmpdir(), `720p-${originalFileName}`), resolution: '1280x720' },
+                { path: path.join(os.tmpdir(), `480p-${originalFileName}`), resolution: '854x480' },
+                { path: path.join(os.tmpdir(), `360p-${originalFileName}`), resolution: '640x360' }
+            ];
+
+            await Promise.all(outputPaths.map(output => transcodeVideo(tempFilePath, output.path, output.resolution)));
+
+            // 上传转码后的文件
+            await Promise.all(outputPaths.map(output => {
+                const transcodeParams = {
+                    Bucket: process.env.AWS_S3_BUCKET,
+                    Key: `${videoFolder}${path.basename(output.path)}`,
+                    Body: fs.readFileSync(output.path)
+                };
+                return s3.upload(transcodeParams).promise();
+            }));
+
+            // 删除本地临时文件
+            fs.unlinkSync(tempFilePath);
+            outputPaths.forEach(output => fs.unlinkSync(output.path));
+
+            res.status(200).send({ msg: 'File uploaded and transcoded successfully' });
+        } catch (uploadError) {
+            res.status(500).send({ msg: 'Error during file upload or transcoding', error: uploadError.message });
+        }
+    });
+});
+
 // 删除文件的路由
 app.delete('/deleteFile/:username/:folder/:filename', ensureAuthenticated, (req, res) => {
     const { username, folder, filename } = req.params;
@@ -151,16 +266,53 @@ app.delete('/deleteFile/:username/:folder/:filename', ensureAuthenticated, (req,
     });
 });
 
+// 删除文件夹的路由
+app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
+    const { username, folder } = req.params;
+    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: prefix
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error fetching files from S3' });
+        }
+
+        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
+
+        if (objectsToDelete.length === 0) {
+            return res.status(404).json({ message: 'Folder not found' });
+        }
+
+        const deleteParams = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Delete: { Objects: objectsToDelete }
+        };
+
+        s3.deleteObjects(deleteParams, (deleteErr) => {
+            if (deleteErr) {
+                return res.status(500).json({ message: 'Error deleting folder' });
+            }
+
+            res.json({ message: 'Folder deleted successfully' });
+        });
+    });
+});
+
 // 浏览用户文件的路由
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
     if (req.session.user.username !== username) {
         return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
     }
-    // 从 S3 获取用户的文件列表
+    // 在这里从 S3 获取用户的文件列表
     const params = {
         Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: `${username}/`
+        Prefix: `${username}/`,
+        Delimiter: '/'  // 使用 Delimiter 参数来分割文件夹和文件
     };
     s3.listObjectsV2(params, (err, data) => {
         if (err) {
@@ -168,22 +320,17 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
             return res.status(500).json({ message: 'Error fetching files from S3' });
         }
 
-        const fileLinks = {};
-        data.Contents.forEach(item => {
-            const keyParts = item.Key.split('/');
-            const folderName = keyParts[1];
-            const filename = keyParts[2];
-            if (!fileLinks[folderName]) {
-                fileLinks[folderName] = [];
-            }
-            if (filename) {
-                fileLinks[folderName].push({
-                    filename: filename,
-                    fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
-                });
-            }
-        });
-        res.json(fileLinks); // 返回 JSON 数据
+        const folderLinks = data.CommonPrefixes.map(item => ({
+            folderName: item.Prefix.split('/')[1]  // 获取文件夹名称
+        }));
+
+        const fileLinks = data.Contents.map(item => ({
+            folderName: item.Key.split('/')[1],
+            filename: item.Key.split('/')[2],
+            fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
+        }));
+
+        res.json({ folders: folderLinks, files: fileLinks }); // 返回文件夹和文件的数据
     });
 });
 
@@ -195,6 +342,15 @@ app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
         res.status(401).json({ message: 'User not authenticated' });
     }
 });
+
+// 设置 multer 存储配置
+const storage = multer.memoryStorage(); // 将文件存储到内存中，稍后上传到 S3
+
+// multer 配置
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 1073741824 } // 1 GB
+}).single('video');
 
 // 确保用户已认证的中间件
 function ensureAuthenticated(req, res, next) {
