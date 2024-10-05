@@ -135,6 +135,7 @@
                     const folderContentDiv = document.createElement('div');
                     folderContentDiv.classList.add('folder-content');
 
+                    // 文件夹内容生成逻辑
                     folderContentMap[folderName].forEach(file => {
                         const fileDiv = document.createElement('div');
 
@@ -151,7 +152,7 @@
                         deleteButton.onclick = () => deleteVideo(folderName, file.filename);
 
                         fileDiv.appendChild(link);
-                        fileDiv.appendChild(deleteButton);
+                        fileDiv.appendChild(deleteButton);  // 确保这里只是为视频添加删除按钮
                         folderContentDiv.appendChild(fileDiv);
                     });
 
