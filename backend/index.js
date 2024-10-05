@@ -183,14 +183,32 @@ const transcodingProgress = {}; // 全局进度记录
 // 实时转码进度的路由
 app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
     const username = req.session.user.username;
+
+    // 日志：显示当前请求的用户名
+    console.log(`Received transcoding progress request from user: ${username}`);
+
     if (transcodingProgress[username]) {
-        // 计算整体进度百分比
-        const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
+        // 计算当前用户的整体进度百分比
+        const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / transcodingProgress[username].length;
+
+        // 日志：显示当前用户的每个分辨率的详细进度
+        console.log(`Progress details for user ${username}: `, transcodingProgress[username]);
+
+        // 日志：显示计算出的总进度
+        console.log(`Overall progress for user ${username}: ${progress}%`);
+
+        // 返回总进度给前端
         res.json({ progress });
+
     } else {
+        // 日志：未找到当前用户的进度记录
+        console.log(`No transcoding progress found for user: ${username}`);
+
+        // 返回 0 进度给前端，表示进度尚未开始
         res.json({ progress: 0 });
     }
 });
+
 
 function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex, s3Key) {
     return new Promise((resolve, reject) => {
