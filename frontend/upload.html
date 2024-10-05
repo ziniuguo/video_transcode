@@ -92,6 +92,9 @@
 
     // 加载文件列表
     function loadFileList() {
+        const fileLinksDiv = document.getElementById('fileLinks');
+        fileLinksDiv.innerHTML = ''; // 清空之前的内容，防止重复
+
         fetch('http://13.211.82.62:3000/browse/' + encodeURIComponent(sessionUsername), {
             credentials: 'include'
         })
