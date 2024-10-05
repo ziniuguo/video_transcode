@@ -131,7 +131,7 @@ app.post('/logout', (req, res) => {
     });
 });
 
-// Upload and transcode route
+// Upload route
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
@@ -201,46 +201,46 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const { username } = req.params;
     if (req.session.user.username !== username) {
         return res.status(403).json({ message: 'You are not authorized to browse this user files.' });
+    }
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: `${username}/`
+    };
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            console.error('Error fetching files from S3:', err);
+            return res.status(500).json({ message: 'Error fetching files from S3' });
         }
-        const params = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Prefix: `${username}/`
-        };
-        s3.listObjectsV2(params, (err, data) => {
-            if (err) {
-                console.error('Error fetching files from S3:', err);
-                return res.status(500).json({ message: 'Error fetching files from S3' });
-            }
 
-            const fileLinks = {};
-            data.Contents.forEach(item => {
-                const keyParts = item.Key.split('/');
-                const folderName = keyParts[1];
-                const filename = keyParts[2];
-                if (!fileLinks[folderName]) {
-                    fileLinks[folderName] = [];
-                }
-                if (filename) {
-                    fileLinks[folderName].push({
-                        filename: filename,
-                        fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
-                    });
-                }
-            });
-            res.json(fileLinks);
+        const fileLinks = {};
+        data.Contents.forEach(item => {
+            const keyParts = item.Key.split('/');
+            const folderName = keyParts[1];
+            const filename = keyParts[2];
+            if (!fileLinks[folderName]) {
+                fileLinks[folderName] = [];
+            }
+            if (filename) {
+                fileLinks[folderName].push({
+                    filename: filename,
+                    fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
+                });
+            }
         });
+        res.json(fileLinks);
     });
+});
 
 // Middleware to ensure user is authenticated
-    function ensureAuthenticated(req, res, next) {
-        if (req.session.user) {
-            next();
-        } else {
-            res.status(401).json({ message: 'Please login to access this page' });
-        }
+function ensureAuthenticated(req, res, next) {
+    if (req.session.user) {
+        next();
+    } else {
+        res.status(401).json({ message: 'Please login to access this page' });
     }
+}
 
 // Start server
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server started on port ${PORT}, listening on 0.0.0.0`);
-    });
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server started on port ${PORT}, listening on 0.0.0.0`);
+});
