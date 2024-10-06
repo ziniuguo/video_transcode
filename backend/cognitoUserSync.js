@@ -1,14 +1,14 @@
 require('dotenv').config(); // Load environment variables
-const mysql = require('mysql2/promise'); // Use promise-based mysql2
 const AWS = require('aws-sdk');
+const mysql = require('mysql2/promise');
 
-// Initialize AWS Cognito
+// Configure AWS Cognito
 const cognito = new AWS.CognitoIdentityServiceProvider({
     region: process.env.AWS_REGION
 });
 
-// Create a connection to the RDS MySQL database
-async function syncCognitoUsersToRDS() {
+// MySQL connection configuration
+async function connectToDatabase() {
     const db = await mysql.createConnection({
         host: process.env.DB_HOST,
         user: process.env.DB_USER,
@@ -20,41 +20,48 @@ async function syncCognitoUsersToRDS() {
             rejectUnauthorized: false
         }
     });
+    console.log('Connected to MySQL database on AWS RDS.');
+    return db;
+}
 
+// Function to fetch all users from the Cognito User Pool
+async function getCognitoUsers() {
+    const params = {
+        UserPoolId: process.env.COGNITO_USER_POOL_ID
+    };
+
+    let users = [];
+    let response;
+
+    do {
+        response = await cognito.listUsers(params).promise();
+        users = users.concat(response.Users);
+        params.PaginationToken = response.PaginationToken;
+    } while (response.PaginationToken);
+
+    console.log(`Retrieved ${users.length} users from Cognito.`);
+    return users;
+}
+
+// Function to sync Cognito users with MySQL RDS
+async function syncCognitoUsersToRDS() {
+    const db = await connectToDatabase();
     try {
-        console.log('Connected to MySQL database on AWS RDS.');
+        const users = await getCognitoUsers();
 
-        // Get Cognito users
-        let users = [];
-        let params = {
-            UserPoolId: process.env.COGNITO_USER_POOL_ID,
-            Limit: 60
-        };
-
-        let response;
-        do {
-            response = await cognito.listUsers(params).promise();
-            users = users.concat(response.Users);
-
-            // Set pagination token if it exists
-            params.PaginationToken = response.PaginationToken;
-        } while (response.PaginationToken);
-
-        console.log(`Retrieved ${users.length} users from Cognito.`);
-
-        // Sync users into RDS database
         for (let user of users) {
             const username = user.Username;
-            const email = user.Attributes.find(attr => attr.Name === 'email')?.Value || 'no-email';
 
+            // Check if the user already exists in RDS
             const [rows] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
 
             if (rows.length === 0) {
                 console.log(`User ${username} not found in RDS. Inserting...`);
 
+                // Insert only the username into the MySQL database
                 await db.execute(
-                    'INSERT INTO users (username, email) VALUES (?, ?)',
-                    [username, email]
+                    'INSERT INTO users (username) VALUES (?)',
+                    [username]
                 );
 
                 console.log(`Inserted user ${username} into RDS.`);
@@ -62,8 +69,6 @@ async function syncCognitoUsersToRDS() {
                 console.log(`User ${username} already exists in RDS.`);
             }
         }
-
-        console.log('Cognito user data synchronization completed.');
     } catch (error) {
         console.error('Error during synchronization:', error);
     } finally {
@@ -72,5 +77,5 @@ async function syncCognitoUsersToRDS() {
     }
 }
 
-// Run the synchronization process
-syncCognitoUsersToRDS().catch(console.error);
+// Run the synchronization function
+syncCognitoUsersToRDS();
