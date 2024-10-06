@@ -77,7 +77,7 @@
 
     // 获取当前会话中的用户名
     function getSessionUsername() {
-        fetch('http://13.211.82.62:3000/getUserInfo', {
+        fetch('${apiUrl}/getUserInfo', {
             method: 'GET',
             credentials: 'include' // 自动发送 Cookies
         })
@@ -102,7 +102,7 @@
         const fileLinksDiv = document.getElementById('fileLinks');
         fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
-        fetch(`http://13.211.82.62:3000/browse/${encodeURIComponent(sessionUsername)}`, {
+        fetch(`${apiUrl}/browse/${encodeURIComponent(sessionUsername)}`, {
             credentials: 'include' // 自动发送 Cookies
         })
             .then(response => response.json())
@@ -177,7 +177,7 @@
     // 删除视频文件
     function deleteVideo(folderName, filename) {
         if (confirm('Are you sure you want to delete this file?')) {
-            fetch(`http://13.211.82.62:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}/${encodeURIComponent(filename)}`, {
+            fetch(`${apiUrl}/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}/${encodeURIComponent(filename)}`, {
                 method: 'DELETE',
                 credentials: 'include' // 自动发送 Cookies
             })
@@ -196,7 +196,7 @@
     // 删除文件夹
     function deleteFolder(folderName) {
         if (confirm('Are you sure you want to delete this folder?')) {
-            fetch(`http://13.211.82.62:3000/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`, {
+            fetch(`${apiUrl}/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`, {
                 method: 'DELETE',
                 credentials: 'include' // 自动发送 Cookies
             })
@@ -235,7 +235,7 @@
 
     // Check or create user folder in S3
     function checkOrCreateUserFolder(username) {
-        return fetch(`http://13.211.82.62:3000/checkOrCreateFolder/${encodeURIComponent(username)}`, {
+        return fetch(`${apiUrl}/checkOrCreateFolder/${encodeURIComponent(username)}`, {
             method: 'POST',
             credentials: 'include'  // Automatically send cookies for authentication
         })
@@ -258,7 +258,7 @@
         progressLabel.textContent = 'Uploading...';
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'http://13.211.82.62:3000/upload', true);
+        xhr.open('POST', '${apiUrl}/upload', true);
         xhr.withCredentials = true;
 
         xhr.upload.onprogress = function (event) {
@@ -288,7 +288,7 @@
         const progressLabel = document.getElementById('progressLabelTranscode');
 
         const intervalId = setInterval(() => {
-            fetch('http://13.211.82.62:3000/transcodingProgress', {
+            fetch('${apiUrl}/transcodingProgress', {
                 credentials: 'include'
             })
                 .then(response => response.json())
@@ -311,7 +311,7 @@
 
     // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
-        fetch('http://13.211.82.62:3000/logout', {
+        fetch('${apiUrl}/logout', {
             method: 'POST',
             credentials: 'include'
         })
