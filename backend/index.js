@@ -188,6 +188,20 @@ app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
     res.json({ username: req.session.user.username });
 });
 
+// Route to check or create user folder in S3
+app.post('/checkOrCreateFolder/:username', ensureAuthenticated, async (req, res) => {
+    const username = req.params.username;
+
+    try {
+        // Check or create user folder in S3
+        await checkOrCreateUserFolder(username);
+        res.status(200).json({ message: 'User folder exists or created successfully' });
+    } catch (error) {
+        console.error('Error checking/creating user folder:', error);
+        res.status(500).json({ message: 'Failed to check/create folder' });
+    }
+});
+
 // Route to browse user files
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const username = req.params.username;
