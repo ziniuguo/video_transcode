@@ -9,6 +9,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.665.0",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "aws-sdk": "^2.1691.0",
     "bcrypt": "^5.1.1",
