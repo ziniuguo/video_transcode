@@ -9,8 +9,8 @@ const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 const mysql = require('mysql2');
 const AWS = require('aws-sdk');
-const bcrypt = require('bcrypt');
 const os = require('os');
+const { CognitoIdentityProviderClient, InitiateAuthCommand, SignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
 
 // 确保 ffmpeg 路径正确
 ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 指定安装的 ffmpeg 路径
@@ -22,6 +22,11 @@ const s3 = new AWS.S3({
     sessionToken: process.env.AWS_SESSION_TOKEN,
     region: process.env.AWS_REGION
 });
+
+// Cognito 配置
+const clientId = process.env.COGNITO_CLIENT_ID; // 从环境变量中读取 clientId
+const userPoolId = process.env.COGNITO_USER_POOL_ID; // 从环境变量中读取 userPoolId
+const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION });
 
 // 启动时检查 S3 的连接性
 s3.listBuckets((err, data) => {
@@ -54,20 +59,6 @@ db.connect((err) => {
     console.log('Connected to MySQL database on AWS RDS');
 });
 
-// 确保 users 表存在
-const createUsersTable = `
-CREATE TABLE IF NOT EXISTS users (
-    username VARCHAR(255) PRIMARY KEY,
-    password VARCHAR(255) NOT NULL
-)`;
-db.query(createUsersTable, (err) => {
-    if (err) {
-        console.error('Error creating users table:', err);
-    } else {
-        console.log('Users table ensured.');
-    }
-});
-
 // 确保 videos 表存在
 const createVideosTable = `
 CREATE TABLE IF NOT EXISTS videos (
@@ -75,8 +66,7 @@ CREATE TABLE IF NOT EXISTS videos (
     username VARCHAR(255) NOT NULL,
     filename VARCHAR(255) NOT NULL,
     s3_key VARCHAR(255) NOT NULL,
-    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (username) REFERENCES users(username)
+    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`;
 db.query(createVideosTable, (err) => {
     if (err) {
@@ -110,61 +100,63 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
 
-// 注册路由
+// 注册路由 (使用 Cognito)
 app.post('/register', async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, email } = req.body;
     try {
-        const hashedPassword = await bcrypt.hash(password, 10); // 加密密码
-        const query = "INSERT INTO users (username, password) VALUES (?, ?)";
-        db.query(query, [username, hashedPassword], (err) => {
-            if (err) {
-                if (err.code === 'ER_DUP_ENTRY') {
-                    return res.status(409).json({ message: 'Username already exists' });
-                } else {
-                    return res.status(500).json({ message: 'Database error' });
-                }
+        // 使用 Cognito 注册用户
+        const signUpCommand = new SignUpCommand({
+            ClientId: clientId,
+            Username: username,
+            Password: password,
+            UserAttributes: [{ Name: "email", Value: email }]
+        });
+
+        const signUpResponse = await cognitoClient.send(signUpCommand);
+        console.log('User registered successfully:', signUpResponse);
+
+        // 为用户创建 S3 文件夹
+        const params = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Key: `${username}/`
+        };
+
+        s3.putObject(params, (s3Err) => {
+            if (s3Err) {
+                console.error('Error creating folder in S3:', s3Err);
+                return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
+            } else {
+                console.log(`S3 folder created for user: ${username}`);
+                return res.status(201).json({ message: 'User registered successfully and S3 folder created' });
             }
-
-            // 创建 S3 文件夹
-            const params = {
-                Bucket: process.env.AWS_S3_BUCKET,
-                Key: `${username}/` // S3 中的文件夹以斜杠结尾
-            };
-
-            s3.putObject(params, (s3Err) => {
-                if (s3Err) {
-                    console.error('Error creating folder in S3:', s3Err);
-                    return res.status(500).json({ message: 'User registered but failed to create folder in S3' });
-                } else {
-                    console.log(`S3 folder created for user: ${username}`);
-                    return res.status(201).json({ message: 'User registered successfully and S3 folder created' });
-                }
-            });
         });
     } catch (error) {
+        console.error('Error registering user:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });
 
-// 登录路由
-app.post('/login', (req, res) => {
+// 登录路由 (使用 Cognito)
+app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    const query = "SELECT * FROM users WHERE username = ?";
-    db.query(query, [username], async (err, results) => {
-        if (err) {
-            return res.status(500).json({ message: 'Database error' });
-        } else if (results.length > 0) {
-            const match = await bcrypt.compare(password, results[0].password);
-            if (match) {
-                req.session.user = { username: results[0].username };
-                return res.status(200).json({ message: 'Login successful' });
-            } else {
-                return res.status(401).json({ message: 'Login failed' });
+    try {
+        const authCommand = new InitiateAuthCommand({
+            AuthFlow: 'USER_PASSWORD_AUTH',
+            ClientId: clientId,
+            AuthParameters: {
+                USERNAME: username,
+                PASSWORD: password
             }
-        } else {
-            return res.status(401).json({ message: 'Login failed' });
-        }
-    });
+        });
+
+        const authResponse = await cognitoClient.send(authCommand);
+        req.session.user = { username }; // 保存会话
+        console.log('Login successful:', authResponse);
+        res.status(200).json({ message: 'Login successful' });
+    } catch (error) {
+        console.error('Error logging in:', error);
+        res.status(401).json({ message: 'Login failed' });
+    }
 });
 
 // 注销路由
@@ -183,32 +175,13 @@ const transcodingProgress = {}; // 全局进度记录
 // 实时转码进度的路由
 app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
     const username = req.session.user.username;
-
-    // 日志：显示当前请求的用户名
-    console.log(`Received transcoding progress request from user: ${username}`);
-
     if (transcodingProgress[username]) {
-        // 计算当前用户的整体进度百分比
         const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / transcodingProgress[username].length;
-
-        // 日志：显示当前用户的每个分辨率的详细进度
-        console.log(`Progress details for user ${username}: `, transcodingProgress[username]);
-
-        // 日志：显示计算出的总进度
-        console.log(`Overall progress for user ${username}: ${progress}%`);
-
-        // 返回总进度给前端
         res.json({ progress });
-
     } else {
-        // 日志：未找到当前用户的进度记录
-        console.log(`No transcoding progress found for user: ${username}`);
-
-        // 返回 0 进度给前端，表示进度尚未开始
         res.json({ progress: 0 });
     }
 });
-
 
 function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex, s3Key) {
     return new Promise((resolve, reject) => {
@@ -217,68 +190,27 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
             .videoCodec('libx264')
             .size(resolution)
             .on('progress', (progress) => {
-                console.log(`Progress for ${username}: ${progress.percent}`);
                 if (!transcodingProgress[username]) {
-                    transcodingProgress[username] = [0, 0, 0, 0]; // 初始化四个分辨率的进度
+                    transcodingProgress[username] = [0, 0, 0, 0];
                 }
-                transcodingProgress[username][resolutionIndex] = progress.percent; // 存储当前分辨率的进度
-
-                // 计算总的转码进度
-                const totalProgress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
-
-                console.log(`Transcoding progress for ${resolution} of ${username}: ${progress.percent}%`);
-                console.log(`Overall transcoding progress for ${username}: ${totalProgress}%`); // 在控制台显示总进度
+                transcodingProgress[username][resolutionIndex] = progress.percent;
             })
             .on('end', () => {
-                transcodingProgress[username][resolutionIndex] = 100; // 完成后设置为 100%
-
-                // 计算并显示最终的总进度（100%）
-                const totalProgress = transcodingProgress[username].reduce((a, b) => a + b, 0) / 4;
-                console.log(`Transcoding complete for ${resolution}: ${outputPath}`);
-                console.log(`Final overall transcoding progress for ${username}: ${totalProgress}%`); // 在控制台显示最终的总进度
-
-                // 上传转码完成的文件到 S3
+                transcodingProgress[username][resolutionIndex] = 100;
                 fs.readFile(outputPath, (err, fileData) => {
-                    if (err) {
-                        console.error(`Error reading transcoded file ${outputPath}:`, err);
-                        return reject(err);
-                    }
-
-                    const params = {
-                        Bucket: process.env.AWS_S3_BUCKET,
-                        Key: s3Key,  // S3 路径
-                        Body: fileData
-                    };
-
+                    if (err) return reject(err);
+                    const params = { Bucket: process.env.AWS_S3_BUCKET, Key: s3Key, Body: fileData };
                     s3.upload(params, (err, data) => {
-                        if (err) {
-                            console.error('Error uploading transcoded video to S3:', err);
-                            return reject(err);
-                        }
-
-                        console.log(`Uploaded transcoded file to S3: ${data.Location}`);
-
-                        // 将文件信息存储到 MySQL 数据库
-                        const query = `
-                            INSERT INTO videos (id, username, filename, s3_key)
-                            VALUES (?, ?, ?, ?)
-                        `;
+                        if (err) return reject(err);
+                        const query = `INSERT INTO videos (id, username, filename, s3_key) VALUES (?, ?, ?, ?)`;
                         db.query(query, [randomUUID(), username, path.basename(outputPath), s3Key], (err) => {
-                            if (err) {
-                                console.error('Error saving video info to database:', err);
-                                return reject(err);
-                            }
-
-                            console.log(`Video info saved to database for ${s3Key}`);
+                            if (err) return reject(err);
                             resolve();
                         });
                     });
                 });
             })
-            .on('error', (err) => {
-                console.error(`Error transcoding file for ${resolution}: ${err.message}`);
-                reject(err);
-            })
+            .on('error', (err) => reject(err))
             .run();
     });
 }
@@ -286,43 +218,24 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
 // 上传并转码的路由
 app.post('/upload', ensureAuthenticated, (req, res) => {
     upload(req, res, async (err) => {
-        if (err) {
-            return res.status(400).send({ msg: err });
-        }
-        if (!req.file) {
-            return res.status(400).send({ msg: 'No file selected!' });
-        }
-
+        if (err) return res.status(400).send({ msg: err });
+        if (!req.file) return res.status(400).send({ msg: 'No file selected!' });
         const username = req.session.user.username;
-        const originalFileName = path.parse(req.file.originalname).name;  // 不包括扩展名的文件名
-        const videoFolder = `${username}/${originalFileName}/`;  // 用户文件夹 + 上传文件名为子文件夹
+        const originalFileName = path.parse(req.file.originalname).name;
+        const videoFolder = `${username}/${originalFileName}/`;
         const tempFolder = path.join(os.tmpdir(), videoFolder);
-
-        // 创建本地目录
-        if (!fs.existsSync(tempFolder)) {
-            fs.mkdirSync(tempFolder, { recursive: true });
-        }
-
+        if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
         const tempFilePath = path.join(tempFolder, req.file.originalname);
         fs.writeFileSync(tempFilePath, req.file.buffer);
-
-        // 初始化转码进度为 0
         transcodingProgress[username] = [0, 0, 0, 0];
-
-        // 定义不同分辨率输出文件路径和 S3 存储路径
         const outputFiles = [
             { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0, s3Key: `${username}/${originalFileName}/720p-${originalFileName}.mp4` },
             { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1, s3Key: `${username}/${originalFileName}/480p-${originalFileName}.mp4` },
             { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2, s3Key: `${username}/${originalFileName}/360p-${originalFileName}.mp4` },
             { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3, s3Key: `${username}/${originalFileName}/240p-${originalFileName}.mp4` }
         ];
-
         try {
-            // 并行处理每个分辨率的转码和上传
-            await Promise.all(outputFiles.map(output =>
-                transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index, output.s3Key)
-            ));
-
+            await Promise.all(outputFiles.map(output => transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index, output.s3Key)));
             res.status(200).send({ msg: 'Files uploaded and transcoded successfully!' });
         } catch (uploadError) {
             console.error('Error during file processing:', uploadError);
@@ -330,106 +243,6 @@ app.post('/upload', ensureAuthenticated, (req, res) => {
         }
     });
 });
-
-// 获取用户文件的路由
-app.get('/browse/:username', ensureAuthenticated, (req, res) => {
-    const { username } = req.params;
-    if (req.session.user.username !== username) {
-        return res.status(403).json({ message: 'You are not authorized to browse this user\'s files.' });
-    }
-    // 在这里从 S3 获取用户的文件列表
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: `${username}/`
-    };
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            console.error('Error fetching files from S3:', err);
-            return res.status(500).json({ message: 'Error fetching files from S3' });
-        }
-        const fileLinks = data.Contents.map(item => ({
-            folderName: item.Key.split('/')[1],
-            filename: item.Key.split('/')[2],
-            fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${item.Key}`
-        }));
-        res.json(fileLinks); // 返回 JSON 数据
-    });
-});
-
-// 删除文件的路由
-app.delete('/deleteFile/:username/:folder/:filename', ensureAuthenticated, (req, res) => {
-    const { username, folder, filename } = req.params;
-    const fileKey = `${username}/${folder}/${filename}`; // 文件的S3路径
-
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Key: fileKey
-    };
-
-    s3.deleteObject(params, (err, data) => {
-        if (err) {
-            console.error('Error deleting file from S3:', err);
-            return res.status(500).json({ message: 'Error deleting file' });
-        }
-
-        res.json({ message: 'File deleted successfully' });
-    });
-});
-
-// 删除文件夹的路由
-app.delete('/deleteFolder/:username/:folder', ensureAuthenticated, (req, res) => {
-    const { username, folder } = req.params;
-    const prefix = `${username}/${folder}/`; // 定义要删除的文件夹路径
-
-    const params = {
-        Bucket: process.env.AWS_S3_BUCKET,
-        Prefix: prefix
-    };
-
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error fetching files from S3' });
-        }
-
-        const objectsToDelete = data.Contents.map(item => ({ Key: item.Key }));
-
-        if (objectsToDelete.length === 0) {
-            return res.status(404).json({ message: 'Folder not found' });
-        }
-
-        const deleteParams = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Delete: { Objects: objectsToDelete }
-        };
-
-        s3.deleteObjects(deleteParams, (deleteErr) => {
-            if (deleteErr) {
-                return res.status(500).json({ message: 'Error deleting folder' });
-            }
-
-            res.json({ message: 'Folder deleted successfully' });
-        });
-    });
-});
-
-// 获取当前登录用户信息
-app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
-    if (req.session.user) {
-        res.json({ username: req.session.user.username });
-    } else {
-        res.status(401).json({ message: 'User not authenticated' });
-    }
-});
-
-
-// 设置 multer 存储配置
-const storage = multer.memoryStorage(); // 将文件存储到内存中，稍后上传到 S3
-
-// multer 配置
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 1073741824 } // 1 GB
-}).single('video');
 
 // 确保用户已认证的中间件
 function ensureAuthenticated(req, res, next) {

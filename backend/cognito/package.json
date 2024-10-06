@@ -1,0 +1,16 @@
+{
+  "name": "cognitodemo",
+  "version": "1.0.0",
+  "description": "[cognito API reference](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/Welcome.html) [Integrating Apps with Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-integrate-apps.html)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.637.0",
+    "aws-jwt-verify": "^4.0.1"
+  }
+}

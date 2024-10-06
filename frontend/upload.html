@@ -100,10 +100,8 @@
         })
             .then(response => response.json())
             .then(fileList => {
-                const fileLinksDiv = document.getElementById('fileLinks');
                 fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
-                const addedFolders = new Set(); // 用于追踪已添加的文件夹
                 const folderContentMap = {};    // 存储文件夹和文件的映射
 
                 fileList.forEach(file => {
@@ -257,36 +255,36 @@
         xhr.send(formData);  // 不要遗漏对 XMLHttpRequest 发送的调用
     });
 
-        // 开始监控总的转码进度
-        function startTranscodingProgress() {
-            const progressElement = document.getElementById('uploadProgress');
-            const progressLabel = document.getElementById('progressLabel');
+    // 开始监控总的转码进度
+    function startTranscodingProgress() {
+        const progressElement = document.getElementById('uploadProgress');
+        const progressLabel = document.getElementById('progressLabel');
 
-            // 每秒请求一次转码进度
-            const intervalId = setInterval(() => {
-                fetch('http://13.211.82.62:3000/transcodingProgress', { credentials: 'include' })
-                    .then(response => response.json())
-                    .then(data => {
-                        const transcodingProgress = data.progress * 0.5; // 转码部分占50%
-                        const totalProgress = 50 + transcodingProgress; // 加上已完成的50%上传部分
-                        progressElement.value = totalProgress;
-                        progressLabel.textContent = `Transcoding... ${Math.round(totalProgress)}%`;
+        // 每秒请求一次转码进度
+        const intervalId = setInterval(() => {
+            fetch('http://13.211.82.62:3000/transcodingProgress', { credentials: 'include' })
+                .then(response => response.json())
+                .then(data => {
+                    const transcodingProgress = data.progress * 0.5; // 转码部分占50%
+                    const totalProgress = 50 + transcodingProgress; // 加上已完成的50%上传部分
+                    progressElement.value = totalProgress;
+                    progressLabel.textContent = `Transcoding... ${Math.round(totalProgress)}%`;
 
-                        if (totalProgress >= 100) {
-                            clearInterval(intervalId); // 停止请求
-                            document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
-                            progressElement.value = 100;
-                            progressLabel.textContent = 'Process complete!';
-                            loadFileList(); // 更新文件列表
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching transcoding progress:', error);
-                    });
-            }, 1000);  // 每秒请求一次
-        }
+                    if (totalProgress >= 100) {
+                        clearInterval(intervalId); // 停止请求
+                        document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
+                        progressElement.value = 100;
+                        progressLabel.textContent = 'Process complete!';
+                        loadFileList(); // 更新文件列表
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching transcoding progress:', error);
+                });
+        }, 1000);  // 每秒请求一次
+    }
 
-        // 注销用户
+    // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('http://13.211.82.62:3000/logout', {
             method: 'POST',
