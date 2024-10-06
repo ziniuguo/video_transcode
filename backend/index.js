@@ -164,8 +164,8 @@ app.post('/login', async (req, res) => {
         const accessToken = authResponse.AuthenticationResult.AccessToken;
 
         // 设置 HttpOnly Cookies，前端无法通过 JavaScript 访问
-        res.cookie('idToken', idToken, { httpOnly: true, secure: true, sameSite: 'Strict' });
-        res.cookie('accessToken', accessToken, { httpOnly: true, secure: true, sameSite: 'Strict' });
+        res.cookie('idToken', idToken, { httpOnly: true, secure: false, sameSite: 'Lax' });
+        res.cookie('accessToken', accessToken, { httpOnly: true, secure: false, sameSite: 'Lax' });
 
         console.log('Login successful:', authResponse);
 
