@@ -93,39 +93,49 @@
     // Load files and organize them into folders and subfolders
     function loadFileList() {
         const fileLinksDiv = document.getElementById('fileLinks');
-        fileLinksDiv.innerHTML = ''; // Clear previous content
+        fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
         fetch(`${apiUrl}/browse/${encodeURIComponent(sessionUsername)}`, {
-            credentials: 'include' // Automatically send cookies
+            credentials: 'include' // 自动发送 Cookies
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch file list');
+                }
+                return response.json();
+            })
             .then(fileList => {
+                console.log("Fetched file list:", fileList); // 确认获取到文件列表
                 if (fileList.length === 0) {
                     fileLinksDiv.innerHTML = '<p>No files uploaded yet.</p>';
                 } else {
                     const folderContentMap = {};
 
+                    // 解析返回的文件列表
                     fileList.forEach(file => {
-                        // Extract folder and file names
                         const keyParts = file.fileUrl.split('/');
-                        const folderName = keyParts[0]; // User root folder
-                        const subFolderName = keyParts[1]; // Video subfolder (transcoded)
-                        const filename = keyParts[2]; // Video file name
+                        const folderName = keyParts[0]; // 用户文件夹
+                        const subFolderName = keyParts[1]; // 子文件夹，例如转码后的视频文件夹
+                        const filename = keyParts[keyParts.length - 1]; // 文件名
 
-                        // Organize folders and files
+                        // 如果文件夹还没存在于 map 中，初始化
                         if (!folderContentMap[folderName]) {
                             folderContentMap[folderName] = {};
                         }
+
+                        // 如果子文件夹还没存在，初始化
                         if (!folderContentMap[folderName][subFolderName]) {
                             folderContentMap[folderName][subFolderName] = [];
                         }
+
+                        // 把文件加入到子文件夹中
                         folderContentMap[folderName][subFolderName].push({
                             filename: filename,
                             fileUrl: file.fileUrl
                         });
                     });
 
-                    // Render the organized folders and files
+                    // 遍历 folderContentMap 并渲染文件夹和文件
                     Object.keys(folderContentMap).forEach(folderName => {
                         const rootFolderTitle = document.createElement('h4');
                         rootFolderTitle.textContent = folderName;
@@ -167,8 +177,8 @@
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('uploadStatus').innerText = 'An error occurred while fetching the file list: ' + error.message;
+                console.error('Error fetching file list:', error);
+                document.getElementById('uploadStatus').innerText = 'An error occurred while fetching file list: ' + error.message;
             });
     }
 
