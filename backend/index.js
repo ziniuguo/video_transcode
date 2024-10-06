@@ -287,6 +287,7 @@ const transcodingProgress = {}; // Global progress tracking
 
 function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex, s3Key) {
     return new Promise((resolve, reject) => {
+        console.log(`Starting transcode for ${inputPath} to resolution ${resolution}...`);
         ffmpeg(inputPath)
             .output(outputPath)
             .videoCodec('libx264')
@@ -296,23 +297,39 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
                     transcodingProgress[username] = [0, 0, 0, 0];
                 }
                 transcodingProgress[username][resolutionIndex] = progress.percent;
+                console.log(`Progress for ${resolution}: ${progress.percent}%`);
             })
             .on('end', () => {
+                console.log(`Transcoding complete for ${outputPath}. Uploading to S3...`);
                 transcodingProgress[username][resolutionIndex] = 100;
                 fs.readFile(outputPath, (err, fileData) => {
-                    if (err) return reject(err);
+                    if (err) {
+                        console.error('Error reading transcoded file:', err);
+                        return reject(err);
+                    }
                     const params = { Bucket: process.env.AWS_S3_BUCKET, Key: s3Key, Body: fileData };
                     s3.upload(params, (err, data) => {
-                        if (err) return reject(err);
+                        if (err) {
+                            console.error('Error uploading to S3:', err);
+                            return reject(err);
+                        }
+                        console.log(`File uploaded to S3 successfully: ${data.Location}`);
                         const query = `INSERT INTO videos (id, username, filename, s3_key) VALUES (?, ?, ?, ?)`;
                         db.query(query, [randomUUID(), username, path.basename(outputPath), s3Key], (err) => {
-                            if (err) return reject(err);
+                            if (err) {
+                                console.error('Error inserting into database:', err);
+                                return reject(err);
+                            }
+                            console.log(`File metadata inserted into MySQL: ${path.basename(outputPath)}`);
                             resolve();
                         });
                     });
                 });
             })
-            .on('error', (err) => reject(err))
+            .on('error', (err) => {
+                console.error(`Error during transcoding for ${outputPath}:`, err);
+                reject(err);
+            })
             .run();
     });
 }
