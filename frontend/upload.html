@@ -78,6 +78,7 @@
     // 获取当前会话中的用户名
     function getSessionUsername() {
         fetch('http://13.211.82.62:3000/getUserInfo', {
+            method: 'GET',
             credentials: 'include' // 自动发送 Cookies
         })
             .then(response => {
