@@ -83,9 +83,9 @@ app.use(cors({
     credentials: true // 允许携带 Cookies
 }));
 
+app.use(cookieParser()); // 使用 cookie-parser 中间件
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // 使用 cookie-parser 中间件
 
 // 设置会话管理
 app.use(session({
@@ -164,8 +164,8 @@ app.post('/login', async (req, res) => {
         const accessToken = authResponse.AuthenticationResult.AccessToken;
 
         // 设置 HttpOnly Cookies，前端无法通过 JavaScript 访问
-        res.cookie('idToken', idToken, { httpOnly: true, secure: false, sameSite: 'Lax' });
-        res.cookie('accessToken', accessToken, { httpOnly: true, secure: false, sameSite: 'Lax' });
+        res.cookie('idToken', idToken, {sameSite: 'lax', httpOnly: true, secure: false });
+        res.cookie('accessToken', accessToken, {sameSite: 'lax', httpOnly: true, secure: false });
 
         console.log('Login successful:', authResponse);
 
@@ -345,10 +345,12 @@ app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
 
 // 确保用户已认证的中间件
 async function ensureAuthenticated(req, res, next) {
-    console.log("ensuring auth")
+    console.log("Ensuring auth...");
+    console.log("Cookies received:", req.cookies); // 打印所有的 Cookies
+
     const idToken = req.cookies.idToken;
-    // console.log("cookies:  ${req.cookies}")
-    console.log("cookies with id: " + req.cookies.idToken);
+    console.log("ID Token:", idToken); // 打印 ID Token
+
     if (!idToken) {
         return res.status(401).json({ message: 'Unauthorized, please login.' });
     }
@@ -356,13 +358,14 @@ async function ensureAuthenticated(req, res, next) {
     try {
         const payload = await verifier.verify(idToken);
         req.session.user = { username: payload["cognito:username"] };
-        console.log("ensuring auth done")
+        console.log("Auth successful for user:", payload["cognito:username"]);
         next();
     } catch (error) {
         console.error('Invalid token:', error);
         res.status(403).json({ message: 'Forbidden, invalid token.' });
     }
 }
+
 
 // 启动服务器并监听 0.0.0.0
 app.listen(PORT, '0.0.0.0', () => {

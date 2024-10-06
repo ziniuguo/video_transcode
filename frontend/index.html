@@ -105,9 +105,9 @@
               console.log("ID Token:", idToken);
               console.log("Access Token:", accessToken);
 
-              // 设置令牌为 Cookies（在生产环境中使用 secure 标志）
-              document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
-              document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax;Secure`;
+              // // 设置令牌为 Cookies（在生产环境中使用 secure 标志）
+              // document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
+              // document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax;Secure`;
 
               alert('Login successful!');
               window.location.href = 'upload.html'; // 重定向到上传页面
