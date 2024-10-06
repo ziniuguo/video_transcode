@@ -88,12 +88,13 @@
             alert('Login failed: ' + err.message);
             console.error('Login error:', err);
           } else {
-            // Successful login, store tokens in localStorage
+            // Successful login, store tokens in cookies
             const idToken = result.AuthenticationResult.IdToken;
             const accessToken = result.AuthenticationResult.AccessToken;
 
-            localStorage.setItem('idToken', idToken);
-            localStorage.setItem('accessToken', accessToken);
+            // Set tokens as cookies (use secure flags in production)
+            document.cookie = `idToken=${idToken};path=/;SameSite=Lax`;
+            document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax`;
 
             alert('Login successful!');
             window.location.href = 'upload.html'; // Redirect to upload page
@@ -112,10 +113,10 @@
         // AWS Cognito registration
         const signUpDetails = {
           ClientId: clientId,
-          Username: username,  // Username used instead of email
+          Username: username,
           Password: password,
           UserAttributes: [
-            { Name: "email", Value: email }  // Email required for user confirmation
+            { Name: "email", Value: email }
           ],
         };
 
@@ -124,8 +125,7 @@
             alert('Registration failed: ' + err.message);
             console.error('Registration error:', err);
           } else {
-            // Successful registration
-            alert('Registration successful!');
+            alert('Registration successful! Please check your email to confirm your account.');
           }
         });
       });

@@ -11,6 +11,7 @@ const mysql = require('mysql2');
 const AWS = require('aws-sdk');
 const os = require('os');
 const { CognitoIdentityProviderClient, InitiateAuthCommand, SignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const cookieParser = require('cookie-parser'); // 解析 Cookie
 
 // 确保 ffmpeg 路径正确
 ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
@@ -68,9 +69,13 @@ db.query(createVideosTable, (err) => {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.use(cors());
+app.use(cors({
+    origin: 'http://your-frontend-domain.com', // 允许的前端域名
+    credentials: true // 允许 Cookies
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser()); // 使用 cookie-parser 中间件
 
 // 设置会话管理
 app.use(session({
@@ -139,39 +144,18 @@ app.post('/login', async (req, res) => {
         });
 
         const authResponse = await cognitoClient.send(authCommand);
-        req.session.user = { username }; // 保存会话
+
+        // 获取认证令牌
+        const idToken = authResponse.AuthenticationResult.IdToken;
+        const accessToken = authResponse.AuthenticationResult.AccessToken;
+
+        // 设置 HttpOnly Cookies，前端无法通过 JavaScript 访问
+        res.cookie('idToken', idToken, { httpOnly: true, secure: true, sameSite: 'Strict' });
+        res.cookie('accessToken', accessToken, { httpOnly: true, secure: true, sameSite: 'Strict' });
+
         console.log('Login successful:', authResponse);
 
-        // 检查用户 S3 文件夹是否存在
-        const params = {
-            Bucket: process.env.AWS_S3_BUCKET,
-            Prefix: `${username}/`
-        };
-
-        s3.listObjectsV2(params, (err, data) => {
-            if (err) {
-                console.error(`Error checking S3 folder for user ${username}:`, err);
-                return res.status(500).json({ message: 'Error checking S3 folder' });
-            }
-
-            // 如果没有找到文件夹，则创建它
-            if (data.KeyCount === 0) {
-                const createFolderParams = {
-                    Bucket: process.env.AWS_S3_BUCKET,
-                    Key: `${username}/`
-                };
-
-                s3.putObject(createFolderParams, (s3Err) => {
-                    if (s3Err) {
-                        console.error('Error creating folder in S3:', s3Err);
-                        return res.status(500).json({ message: 'Login successful, but failed to create S3 folder' });
-                    } else {
-                        console.log(`S3 folder created for user: ${username}`);
-                    }
-                });
-            }
-        });
-
+        // 返回成功响应
         res.status(200).json({ message: 'Login successful' });
     } catch (error) {
         console.error('Error logging in:', error);
@@ -181,17 +165,14 @@ app.post('/login', async (req, res) => {
 
 // 注销路由
 app.post('/logout', (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            return res.status(500).send('Logout failed');
-        }
-        res.send('Logout successful');
-    });
+    res.clearCookie('idToken');
+    res.clearCookie('accessToken');
+    res.status(200).send('Logout successful');
 });
 
 // 获取当前用户信息的路由
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
-    if (req.session.user) {
+    if (req.cookies.idToken) {
         res.json({ username: req.session.user.username });
     } else {
         res.status(401).json({ message: 'Not authenticated' });
@@ -353,11 +334,19 @@ app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
 
 // 确保用户已认证的中间件
 function ensureAuthenticated(req, res, next) {
-    if (req.session.user) {
-        next();
-    } else {
-        res.status(401).json({ message: 'Please login to access this page' });
+    const idToken = req.cookies.idToken;
+
+    if (!idToken) {
+        return res.status(401).json({ message: 'Unauthorized, please login.' });
     }
+
+    // 这里可以添加验证 idToken 的逻辑，确保令牌有效
+    verifyIdToken(idToken).then(() => {
+        next();
+    }).catch(error => {
+        console.error('Invalid token:', error);
+        res.status(403).json({ message: 'Forbidden, invalid token.' });
+    });
 }
 
 // 启动服务器并监听 0.0.0.0
