@@ -152,6 +152,37 @@ app.post('/login', async (req, res) => {
         const authResponse = await cognitoClient.send(authCommand);
         req.session.user = { username }; // 保存会话
         console.log('Login successful:', authResponse);
+
+        // 检查用户 S3 文件夹是否存在
+        const params = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Prefix: `${username}/`
+        };
+
+        s3.listObjectsV2(params, (err, data) => {
+            if (err) {
+                console.error(`Error checking S3 folder for user ${username}:`, err);
+                return res.status(500).json({ message: 'Error checking S3 folder' });
+            }
+
+            // 如果没有找到文件夹，则创建它
+            if (data.KeyCount === 0) {
+                const createFolderParams = {
+                    Bucket: process.env.AWS_S3_BUCKET,
+                    Key: `${username}/`
+                };
+
+                s3.putObject(createFolderParams, (s3Err) => {
+                    if (s3Err) {
+                        console.error('Error creating folder in S3:', s3Err);
+                        return res.status(500).json({ message: 'Login successful, but failed to create S3 folder' });
+                    } else {
+                        console.log(`S3 folder created for user: ${username}`);
+                    }
+                });
+            }
+        });
+
         res.status(200).json({ message: 'Login successful' });
     } catch (error) {
         console.error('Error logging in:', error);
