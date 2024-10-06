@@ -12,6 +12,7 @@ const AWS = require('aws-sdk');
 const os = require('os');
 const { CognitoIdentityProviderClient, InitiateAuthCommand, SignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const cookieParser = require('cookie-parser'); // 解析 Cookie
+const { CognitoJwtVerifier } = require('aws-jwt-verify'); // 用于验证JWT
 
 // 确保 ffmpeg 路径正确
 ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
@@ -26,7 +27,15 @@ const s3 = new AWS.S3({
 
 // Cognito 配置
 const clientId = process.env.COGNITO_CLIENT_ID;
+const userPoolId = process.env.COGNITO_USER_POOL_ID;
 const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION });
+
+// 设置 Cognito JWT 验证
+const verifier = CognitoJwtVerifier.create({
+    userPoolId: userPoolId,
+    tokenUse: "id", // 验证 idToken
+    clientId: clientId,
+});
 
 // MySQL 连接配置
 const db = mysql.createConnection({
@@ -145,7 +154,11 @@ app.post('/login', async (req, res) => {
 
         const authResponse = await cognitoClient.send(authCommand);
 
-        // 获取认证令牌
+        if (!authResponse.AuthenticationResult) {
+            console.error("Login failed, AuthenticationResult not found:", authResponse);
+            return res.status(401).json({ message: 'Login failed, check email confirmation or credentials' });
+        }
+
         const idToken = authResponse.AuthenticationResult.IdToken;
         const accessToken = authResponse.AuthenticationResult.AccessToken;
 
@@ -333,20 +346,21 @@ app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
 });
 
 // 确保用户已认证的中间件
-function ensureAuthenticated(req, res, next) {
+async function ensureAuthenticated(req, res, next) {
     const idToken = req.cookies.idToken;
 
     if (!idToken) {
         return res.status(401).json({ message: 'Unauthorized, please login.' });
     }
 
-    // 这里可以添加验证 idToken 的逻辑，确保令牌有效
-    verifyIdToken(idToken).then(() => {
+    try {
+        const payload = await verifier.verify(idToken);
+        req.session.user = { username: payload["cognito:username"] };
         next();
-    }).catch(error => {
+    } catch (error) {
         console.error('Invalid token:', error);
         res.status(403).json({ message: 'Forbidden, invalid token.' });
-    });
+    }
 }
 
 // 启动服务器并监听 0.0.0.0
