@@ -77,7 +77,7 @@
         console.log("Attempting to log in with username:", username);
 
         // 使用 fetch 发出登录请求
-        fetch('${apiUrl}/login', {
+        fetch(`${apiUrl}/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -116,7 +116,7 @@
         console.log("Attempting to register with username:", username, "and email:", email);
 
         // 使用 fetch 发出注册请求
-        fetch('${apiUrl}/register', {
+        fetch(`${apiUrl}/register`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

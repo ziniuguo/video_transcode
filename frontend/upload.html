@@ -79,7 +79,7 @@
 
     // 获取当前会话中的用户名
     function getSessionUsername() {
-        fetch('${apiUrl}/getUserInfo', {
+        fetch(`${apiUrl}/getUserInfo`, {
             method: 'GET',
             credentials: 'include' // 自动发送 Cookies
         })
@@ -290,7 +290,7 @@
         const progressLabel = document.getElementById('progressLabelTranscode');
 
         const intervalId = setInterval(() => {
-            fetch('${apiUrl}/transcodingProgress', {
+            fetch(`${apiUrl}/transcodingProgress`, {
                 credentials: 'include'
             })
                 .then(response => response.json())
@@ -313,7 +313,7 @@
 
     // 注销用户
     document.getElementById('logoutButton').addEventListener('click', function () {
-        fetch('${apiUrl}/logout', {
+        fetch(`${apiUrl}/logout`, {
             method: 'POST',
             credentials: 'include'
         })
