@@ -99,7 +99,6 @@
             });
     }
 
-    // 加载文件列表
     function loadFileList() {
         const fileLinksDiv = document.getElementById('fileLinks');
         fileLinksDiv.innerHTML = ''; // 清空之前的内容
@@ -112,11 +111,12 @@
                 if (fileList.length === 0) {
                     fileLinksDiv.innerHTML = '<p>No files uploaded yet.</p>';
                 } else {
-                    const addedFolders = new Set();
                     const folderContentMap = {};
 
                     fileList.forEach(file => {
-                        const folderName = file.folderName;
+                        // 从 Key 中提取文件夹的名字
+                        const keyParts = file.fileUrl.split('/');
+                        const folderName = keyParts[keyParts.length - 2]; // 倒数第二个部分为文件夹名
                         const filename = file.filename;
 
                         if (!folderContentMap[folderName]) {
