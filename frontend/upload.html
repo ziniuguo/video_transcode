@@ -249,7 +249,6 @@
             });
     }
 
-    // Upload file function
     function uploadFile(file) {
         const formData = new FormData();
         formData.append('video', file);
@@ -260,7 +259,7 @@
         progressLabel.textContent = 'Uploading...';
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '${apiUrl}/upload', true);
+        xhr.open('POST', `${apiUrl}/upload`, true);  // 确保使用 apiUrl 变量拼接上传路径
         xhr.withCredentials = true;
 
         xhr.upload.onprogress = function (event) {
