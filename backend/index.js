@@ -347,7 +347,7 @@ app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
 async function ensureAuthenticated(req, res, next) {
     console.log("ensuring auth")
     const idToken = req.cookies.idToken;
-    console.log("cookies: " + req.cookies)
+    // console.log("cookies:  ${req.cookies}")
     console.log("cookies with id: " + req.cookies.idToken);
     if (!idToken) {
         return res.status(401).json({ message: 'Unauthorized, please login.' });
