@@ -93,8 +93,8 @@
             const accessToken = result.AuthenticationResult.AccessToken;
 
             // Set tokens as cookies (use secure flags in production)
-            document.cookie = `idToken=${idToken};path=/;SameSite=Lax`;
-            document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax`;
+            document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
+            document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax;Secure`;
 
             alert('Login successful!');
             window.location.href = 'upload.html'; // Redirect to upload page
