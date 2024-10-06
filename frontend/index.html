@@ -73,6 +73,8 @@
         const username = document.getElementById('floatingUsername').value;
         const password = document.getElementById('floatingPassword').value;
 
+        console.log("Attempting to log in with username:", username);
+
         // AWS Cognito login
         const authDetails = {
           ClientId: clientId,
@@ -86,24 +88,29 @@
         cognitoIdentity.initiateAuth(authDetails, function(err, result) {
           if (err) {
             alert('Login failed: ' + err.message);
-            console.error('Login error:', err);
+
+            // 输出更详细的错误信息
+            console.error('Login error details:', err);
+            console.error('Error code:', err.code); // 输出错误代码
+            console.error('Error name:', err.name); // 输出错误名称
+            console.error('Error message:', err.message); // 输出错误消息
           } else {
-            // Check if the result contains AuthenticationResult
+            // 检查结果中是否包含 AuthenticationResult
             if (result.AuthenticationResult) {
               const idToken = result.AuthenticationResult.IdToken;
               const accessToken = result.AuthenticationResult.AccessToken;
 
-              // Log success and token details for debugging
+              // 输出成功和令牌详细信息进行调试
               console.log("Login successful. Tokens received:");
               console.log("ID Token:", idToken);
               console.log("Access Token:", accessToken);
 
-              // Set tokens as cookies (use secure flags in production)
+              // 设置令牌为 Cookies（在生产环境中使用 secure 标志）
               document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
               document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax;Secure`;
 
               alert('Login successful!');
-              window.location.href = 'upload.html'; // Redirect to upload page
+              window.location.href = 'upload.html'; // 重定向到上传页面
             } else {
               console.error('Authentication result not found.');
               alert('Authentication failed. Please ensure your email is confirmed or your credentials are correct.');
@@ -120,6 +127,8 @@
         const password = document.getElementById('floatingPassword').value;
         const email = document.getElementById('floatingEmail').value;
 
+        console.log("Attempting to register with username:", username, "and email:", email);
+
         // AWS Cognito registration
         const signUpDetails = {
           ClientId: clientId,
@@ -133,7 +142,12 @@
         cognitoIdentity.signUp(signUpDetails, function(err, result) {
           if (err) {
             alert('Registration failed: ' + err.message);
-            console.error('Registration error:', err);
+
+            // 输出注册错误的详细信息
+            console.error('Registration error details:', err);
+            console.error('Error code:', err.code);
+            console.error('Error name:', err.name);
+            console.error('Error message:', err.message);
           } else {
             alert('Registration successful! Please check your email to confirm your account.');
           }
