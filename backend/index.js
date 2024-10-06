@@ -13,7 +13,7 @@ const os = require('os');
 const { CognitoIdentityProviderClient, InitiateAuthCommand, SignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
 
 // 确保 ffmpeg 路径正确
-ffmpeg.setFfmpegPath("/usr/bin/ffmpeg"); // 指定安装的 ffmpeg 路径
+ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
 
 // 配置 AWS S3
 const s3 = new AWS.S3({
@@ -24,18 +24,8 @@ const s3 = new AWS.S3({
 });
 
 // Cognito 配置
-const clientId = process.env.COGNITO_CLIENT_ID; // 从环境变量中读取 clientId
-const userPoolId = process.env.COGNITO_USER_POOL_ID; // 从环境变量中读取 userPoolId
+const clientId = process.env.COGNITO_CLIENT_ID;
 const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION });
-
-// 启动时检查 S3 的连接性
-s3.listBuckets((err, data) => {
-    if (err) {
-        console.log("S3 Connection Error:", err);
-    } else {
-        console.log("S3 Connection Success. Total Buckets: ", data.Buckets.length);
-    }
-});
 
 // MySQL 连接配置
 const db = mysql.createConnection({
@@ -104,7 +94,6 @@ app.get('/', (req, res) => {
 app.post('/register', async (req, res) => {
     const { username, password, email } = req.body;
     try {
-        // 使用 Cognito 注册用户
         const signUpCommand = new SignUpCommand({
             ClientId: clientId,
             Username: username,
@@ -203,17 +192,6 @@ app.post('/logout', (req, res) => {
 // 视频转码函数
 const transcodingProgress = {}; // 全局进度记录
 
-// 实时转码进度的路由
-app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
-    const username = req.session.user.username;
-    if (transcodingProgress[username]) {
-        const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / transcodingProgress[username].length;
-        res.json({ progress });
-    } else {
-        res.json({ progress: 0 });
-    }
-});
-
 function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex, s3Key) {
     return new Promise((resolve, reject) => {
         ffmpeg(inputPath)
@@ -247,32 +225,30 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
 }
 
 // 上传并转码的路由
-app.post('/upload', ensureAuthenticated, (req, res) => {
-    upload(req, res, async (err) => {
-        if (err) return res.status(400).send({ msg: err });
-        if (!req.file) return res.status(400).send({ msg: 'No file selected!' });
-        const username = req.session.user.username;
-        const originalFileName = path.parse(req.file.originalname).name;
-        const videoFolder = `${username}/${originalFileName}/`;
-        const tempFolder = path.join(os.tmpdir(), videoFolder);
-        if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
-        const tempFilePath = path.join(tempFolder, req.file.originalname);
-        fs.writeFileSync(tempFilePath, req.file.buffer);
-        transcodingProgress[username] = [0, 0, 0, 0];
-        const outputFiles = [
-            { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0, s3Key: `${username}/${originalFileName}/720p-${originalFileName}.mp4` },
-            { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1, s3Key: `${username}/${originalFileName}/480p-${originalFileName}.mp4` },
-            { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2, s3Key: `${username}/${originalFileName}/360p-${originalFileName}.mp4` },
-            { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3, s3Key: `${username}/${originalFileName}/240p-${originalFileName}.mp4` }
-        ];
-        try {
-            await Promise.all(outputFiles.map(output => transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index, output.s3Key)));
-            res.status(200).send({ msg: 'Files uploaded and transcoded successfully!' });
-        } catch (uploadError) {
-            console.error('Error during file processing:', uploadError);
-            res.status(500).send({ msg: 'Error during file processing' });
-        }
-    });
+app.post('/upload', ensureAuthenticated, multer({ storage: multer.memoryStorage() }).single('video'), async (req, res) => {
+    if (!req.file) return res.status(400).send({ msg: 'No file selected!' });
+    const username = req.session.user.username;
+    const originalFileName = path.parse(req.file.originalname).name;
+    const videoFolder = `${username}/${originalFileName}/`;
+    const tempFolder = path.join(os.tmpdir(), videoFolder);
+    if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
+    const tempFilePath = path.join(tempFolder, req.file.originalname);
+    fs.writeFileSync(tempFilePath, req.file.buffer);
+
+    const outputFiles = [
+        { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0, s3Key: `${username}/${originalFileName}/720p-${originalFileName}.mp4` },
+        { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1, s3Key: `${username}/${originalFileName}/480p-${originalFileName}.mp4` },
+        { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2, s3Key: `${username}/${originalFileName}/360p-${originalFileName}.mp4` },
+        { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3, s3Key: `${username}/${originalFileName}/240p-${originalFileName}.mp4` }
+    ];
+
+    try {
+        await Promise.all(outputFiles.map(output => transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index, output.s3Key)));
+        res.status(200).send({ msg: 'Files uploaded and transcoded successfully!' });
+    } catch (uploadError) {
+        console.error('Error during file processing:', uploadError);
+        res.status(500).send({ msg: 'Error during file processing' });
+    }
 });
 
 // 确保用户已认证的中间件
