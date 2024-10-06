@@ -59,7 +59,7 @@
     </div>
 
     <!-- 转码进度条 -->
-    <div id="transcodeProgressContainer"> <!-- 修正这里的 id -->
+    <div id="transcodeProgressContainer">
         <progress id="transcodeProgress" value="0" max="100"></progress>
         <div id="progressLabelTranscode">Waiting for Transcoding...</div>
     </div>
@@ -74,10 +74,20 @@
 <script src="/assets/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     let sessionUsername = '';
+    const idToken = localStorage.getItem('idToken');
+
+    // 如果没有身份令牌，跳转回登录页面
+    if (!idToken) {
+        alert('Please log in first.');
+        window.location.href = '/';
+    }
 
     // 获取当前会话中的用户名
     function getSessionUsername() {
         fetch('http://13.211.82.62:3000/getUserInfo', {
+            headers: {
+                'Authorization': idToken // 发送身份验证令牌
+            },
             credentials: 'include'
         })
             .then(response => {
@@ -102,6 +112,9 @@
         fileLinksDiv.innerHTML = ''; // 清空之前的内容
 
         fetch(`http://13.211.82.62:3000/browse/${encodeURIComponent(sessionUsername)}`, {
+            headers: {
+                'Authorization': idToken
+            },
             credentials: 'include'
         })
             .then(response => response.json())
@@ -130,6 +143,9 @@
         if (confirm('Are you sure you want to delete this file?')) {
             fetch(`http://13.211.82.62:3000/deleteFile/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}/${encodeURIComponent(filename)}`, {
                 method: 'DELETE',
+                headers: {
+                    'Authorization': idToken
+                },
                 credentials: 'include'
             })
                 .then(response => response.json())
@@ -164,6 +180,7 @@
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', 'http://13.211.82.62:3000/upload', true);
+        xhr.setRequestHeader('Authorization', idToken); // 设置令牌
 
         xhr.upload.onprogress = function (event) {
             if (event.lengthComputable) {
@@ -192,7 +209,12 @@
         const progressLabel = document.getElementById('progressLabelTranscode');
 
         const intervalId = setInterval(() => {
-            fetch('http://13.211.82.62:3000/transcodingProgress', { credentials: 'include' })
+            fetch('http://13.211.82.62:3000/transcodingProgress', {
+                headers: {
+                    'Authorization': idToken
+                },
+                credentials: 'include'
+            })
                 .then(response => response.json())
                 .then(data => {
                     const transcodingProgress = data.progress;
@@ -215,6 +237,9 @@
     document.getElementById('logoutButton').addEventListener('click', function () {
         fetch('http://13.211.82.62:3000/logout', {
             method: 'POST',
+            headers: {
+                'Authorization': idToken
+            },
             credentials: 'include'
         })
             .then(response => {
@@ -224,6 +249,7 @@
                 return response.text();
             })
             .then(data => {
+                localStorage.removeItem('idToken'); // 移除令牌
                 alert('Logged out successfully!');
                 window.location.href = '/'; // 重定向到首页
             })

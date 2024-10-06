@@ -88,7 +88,13 @@
             alert('Login failed: ' + err.message);
             console.error('Login error:', err);
           } else {
-            // Successful login
+            // Successful login, store tokens in localStorage
+            const idToken = result.AuthenticationResult.IdToken;
+            const accessToken = result.AuthenticationResult.AccessToken;
+
+            localStorage.setItem('idToken', idToken);
+            localStorage.setItem('accessToken', accessToken);
+
             alert('Login successful!');
             window.location.href = 'upload.html'; // Redirect to upload page
           }
