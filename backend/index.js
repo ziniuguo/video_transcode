@@ -189,6 +189,95 @@ app.post('/logout', (req, res) => {
     });
 });
 
+// 获取当前用户信息的路由
+app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
+    if (req.session.user) {
+        res.json({ username: req.session.user.username });
+    } else {
+        res.status(401).json({ message: 'Not authenticated' });
+    }
+});
+
+// 浏览指定用户的文件列表
+app.get('/browse/:username', ensureAuthenticated, (req, res) => {
+    const username = req.params.username;
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: `${username}/`
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            console.error('Error fetching file list from S3:', err);
+            return res.status(500).json({ message: 'Error fetching file list' });
+        }
+
+        const files = data.Contents.map(file => ({
+            filename: file.Key.split('/').pop(),
+            fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${file.Key}`
+        }));
+
+        res.status(200).json(files);
+    });
+});
+
+// 删除指定用户文件
+app.delete('/deleteFile/:username/:folderName/:filename', ensureAuthenticated, (req, res) => {
+    const { username, folderName, filename } = req.params;
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: `${username}/${folderName}/${filename}`
+    };
+
+    s3.deleteObject(params, (err, data) => {
+        if (err) {
+            console.error('Error deleting file from S3:', err);
+            return res.status(500).json({ message: 'Error deleting file' });
+        }
+
+        res.status(200).json({ message: 'File deleted successfully' });
+    });
+});
+
+// 删除指定用户的整个文件夹
+app.delete('/deleteFolder/:username/:folderName', ensureAuthenticated, (req, res) => {
+    const { username, folderName } = req.params;
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Prefix: `${username}/${folderName}/`
+    };
+
+    s3.listObjectsV2(params, (err, data) => {
+        if (err) {
+            console.error('Error listing folder contents for deletion:', err);
+            return res.status(500).json({ message: 'Error deleting folder' });
+        }
+
+        const objectsToDelete = data.Contents.map(file => ({ Key: file.Key }));
+
+        if (objectsToDelete.length === 0) {
+            return res.status(404).json({ message: 'No files found in folder' });
+        }
+
+        const deleteParams = {
+            Bucket: process.env.AWS_S3_BUCKET,
+            Delete: { Objects: objectsToDelete }
+        };
+
+        s3.deleteObjects(deleteParams, (err, data) => {
+            if (err) {
+                console.error('Error deleting folder contents:', err);
+                return res.status(500).json({ message: 'Error deleting folder contents' });
+            }
+
+            res.status(200).json({ message: 'Folder and its contents deleted successfully' });
+        });
+    });
+});
+
 // 视频转码函数
 const transcodingProgress = {}; // 全局进度记录
 
@@ -248,6 +337,17 @@ app.post('/upload', ensureAuthenticated, multer({ storage: multer.memoryStorage(
     } catch (uploadError) {
         console.error('Error during file processing:', uploadError);
         res.status(500).send({ msg: 'Error during file processing' });
+    }
+});
+
+// 实时转码进度的路由
+app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
+    const username = req.session.user.username;
+    if (transcodingProgress[username]) {
+        const progress = transcodingProgress[username].reduce((a, b) => a + b, 0) / transcodingProgress[username].length;
+        res.json({ progress });
+    } else {
+        res.json({ progress: 0 });
     }
 });
 
