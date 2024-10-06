@@ -79,9 +79,10 @@ db.query(createVideosTable, (err) => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(cors({
-    origin: 'http://your-frontend-domain.com', // 允许的前端域名
-    credentials: true // 允许 Cookies
+    origin: true, // 允许所有来源
+    credentials: true // 允许携带 Cookies
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser()); // 使用 cookie-parser 中间件
