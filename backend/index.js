@@ -186,6 +186,7 @@ app.post('/logout', (req, res) => {
 
 // 获取当前用户信息的路由
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
+    console.log("?????????????????????")
     res.json({ username: req.session.user.username });
 });
 
@@ -344,6 +345,7 @@ app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
 
 // 确保用户已认证的中间件
 async function ensureAuthenticated(req, res, next) {
+    console.log("ensuring auth")
     const idToken = req.cookies.idToken;
 
     if (!idToken) {
@@ -353,6 +355,7 @@ async function ensureAuthenticated(req, res, next) {
     try {
         const payload = await verifier.verify(idToken);
         req.session.user = { username: payload["cognito:username"] };
+        console.log("ensuring auth done")
         next();
     } catch (error) {
         console.error('Invalid token:', error);
