@@ -88,16 +88,21 @@
             alert('Login failed: ' + err.message);
             console.error('Login error:', err);
           } else {
-            // Successful login, store tokens in cookies
-            const idToken = result.AuthenticationResult.IdToken;
-            const accessToken = result.AuthenticationResult.AccessToken;
+            if (result.AuthenticationResult) {
+              // Successful login, store tokens in cookies
+              const idToken = result.AuthenticationResult.IdToken;
+              const accessToken = result.AuthenticationResult.AccessToken;
 
-            // Set tokens as cookies (use secure flags in production)
-            document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
-            document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax;Secure`;
+              // Set tokens as cookies (use secure flags in production)
+              document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
+              document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax;Secure`;
 
-            alert('Login successful!');
-            window.location.href = 'upload.html'; // Redirect to upload page
+              alert('Login successful!');
+              window.location.href = 'upload.html'; // Redirect to upload page
+            } else {
+              console.error('Authentication result not found.');
+              alert('Authentication failed.');
+            }
           }
         });
       });
