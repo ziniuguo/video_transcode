@@ -3,10 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="">
-  <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
-  <meta name="generator" content="Hugo 0.122.0">
-  <title>Signin Template · Bootstrap v5.3</title>
+  <meta name="description" content="AWS Cognito Registration and Login">
+  <meta name="author" content="Your Name">
+  <title>Signin Template · AWS Cognito</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@docsearch/css@3">
   <link href="/assets/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -19,17 +18,17 @@
     <img class="mb-4" src="/assets/brand/e76568e7ed7e2b2c1f8d5024208664f842946887.jpg" alt="" width="72" height="57">
     <h1 class="h3 mb-3 fw-normal">Please sign in</h1>
 
-    <div class="form-floating">
+    <div class="form-floating mb-3">
       <input type="text" class="form-control" id="floatingUsername" placeholder="Username" required>
       <label for="floatingUsername">Username</label>
     </div>
 
-    <div class="form-floating">
+    <div class="form-floating mb-3">
       <input type="password" class="form-control" id="floatingPassword" placeholder="Password" required>
       <label for="floatingPassword">Password</label>
     </div>
 
-    <div class="form-floating">
+    <div class="form-floating mb-3">
       <input type="email" class="form-control" id="floatingEmail" placeholder="Email (for registration)" required>
       <label for="floatingEmail">Email</label>
     </div>
@@ -46,7 +45,7 @@
       <button class="btn btn-secondary w-50 py-2 ms-2" type="button" id="registerBtn">Register</button>
     </div>
 
-    <p class="mt-5 mb-3 text-body-secondary">&copy; 2017–2024</p>
+    <p class="mt-5 mb-3 text-body-secondary">&copy; 2024</p>
   </form>
 </main>
 
@@ -75,48 +74,33 @@
 
         console.log("Attempting to log in with username:", username);
 
-        // AWS Cognito login
-        const authDetails = {
-          ClientId: clientId,
-          AuthFlow: 'USER_PASSWORD_AUTH',
-          AuthParameters: {
-            USERNAME: username,
-            PASSWORD: password,
+        // 使用 fetch 发出登录请求
+        fetch('http://your-backend-domain.com/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
           },
-        };
-
-        cognitoIdentity.initiateAuth(authDetails, function(err, result) {
-          if (err) {
-            alert('Login failed: ' + err.message);
-
-            // 输出更详细的错误信息
-            console.error('Login error details:', err);
-            console.error('Error code:', err.code); // 输出错误代码
-            console.error('Error name:', err.name); // 输出错误名称
-            console.error('Error message:', err.message); // 输出错误消息
-          } else {
-            // 检查结果中是否包含 AuthenticationResult
-            if (result.AuthenticationResult) {
-              const idToken = result.AuthenticationResult.IdToken;
-              const accessToken = result.AuthenticationResult.AccessToken;
-
-              // 输出成功和令牌详细信息进行调试
-              console.log("Login successful. Tokens received:");
-              console.log("ID Token:", idToken);
-              console.log("Access Token:", accessToken);
-
-              // // 设置令牌为 Cookies（在生产环境中使用 secure 标志）
-              // document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
-              // document.cookie = `accessToken=${accessToken};path=/;SameSite=Lax;Secure`;
-
-              alert('Login successful!');
-              window.location.href = 'upload.html'; // 重定向到上传页面
-            } else {
-              console.error('Authentication result not found.');
-              alert('Authentication failed. Please ensure your email is confirmed or your credentials are correct.');
-            }
-          }
-        });
+          credentials: 'include', // 自动携带 Cookies
+          body: JSON.stringify({
+            username: username,
+            password: password
+          })
+        })
+                .then(response => {
+                  if (!response.ok) {
+                    throw new Error('Login failed');
+                  }
+                  return response.json();
+                })
+                .then(data => {
+                  // 登录成功后跳转到上传页面
+                  alert('Login successful!');
+                  window.location.href = 'upload.html';
+                })
+                .catch(error => {
+                  alert('Login failed: ' + error.message);
+                  console.error('Error:', error);
+                });
       });
     }
 
@@ -129,29 +113,32 @@
 
         console.log("Attempting to register with username:", username, "and email:", email);
 
-        // AWS Cognito registration
-        const signUpDetails = {
-          ClientId: clientId,
-          Username: username,
-          Password: password,
-          UserAttributes: [
-            { Name: "email", Value: email }
-          ],
-        };
-
-        cognitoIdentity.signUp(signUpDetails, function(err, result) {
-          if (err) {
-            alert('Registration failed: ' + err.message);
-
-            // 输出注册错误的详细信息
-            console.error('Registration error details:', err);
-            console.error('Error code:', err.code);
-            console.error('Error name:', err.name);
-            console.error('Error message:', err.message);
-          } else {
-            alert('Registration successful! Please check your email to confirm your account.');
-          }
-        });
+        // 使用 fetch 发出注册请求
+        fetch('http://your-backend-domain.com/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include', // 自动携带 Cookies
+          body: JSON.stringify({
+            username: username,
+            password: password,
+            email: email
+          })
+        })
+                .then(response => {
+                  if (!response.ok) {
+                    throw new Error('Registration failed');
+                  }
+                  return response.json();
+                })
+                .then(data => {
+                  alert('Registration successful! Please check your email to confirm your account.');
+                })
+                .catch(error => {
+                  alert('Registration failed: ' + error.message);
+                  console.error('Error:', error);
+                });
       });
     }
   });
