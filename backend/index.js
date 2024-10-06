@@ -1,4 +1,4 @@
-require('dotenv').config(); // 加载环境变量
+require('dotenv').config(); // Load environment variables
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const express = require('express');
@@ -11,13 +11,13 @@ const mysql = require('mysql2');
 const AWS = require('aws-sdk');
 const os = require('os');
 const { CognitoIdentityProviderClient, InitiateAuthCommand, SignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
-const cookieParser = require('cookie-parser'); // 解析 Cookie
-const { CognitoJwtVerifier } = require('aws-jwt-verify'); // 用于验证JWT
+const cookieParser = require('cookie-parser'); // To parse cookies
+const { CognitoJwtVerifier } = require('aws-jwt-verify'); // To verify JWT tokens
 
-// 确保 ffmpeg 路径正确
+// Ensure ffmpeg path is correctly set
 ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
 
-// 配置 AWS S3
+// Configure AWS S3
 const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -25,19 +25,19 @@ const s3 = new AWS.S3({
     region: process.env.AWS_REGION
 });
 
-// Cognito 配置
+// Cognito configuration
 const clientId = process.env.COGNITO_CLIENT_ID;
 const userPoolId = process.env.COGNITO_USER_POOL_ID;
 const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION });
 
-// 设置 Cognito JWT 验证
+// Set up Cognito JWT verification
 const verifier = CognitoJwtVerifier.create({
     userPoolId: userPoolId,
-    tokenUse: "id", // 验证 idToken
+    tokenUse: "id", // Verify idToken
     clientId: clientId,
 });
 
-// MySQL 连接配置
+// MySQL connection configuration
 const db = mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
@@ -50,7 +50,7 @@ const db = mysql.createConnection({
     }
 });
 
-// 测试数据库连接
+// Test database connection
 db.connect((err) => {
     if (err) {
         console.error('Error connecting to MySQL database:', err);
@@ -59,7 +59,7 @@ db.connect((err) => {
     console.log('Connected to MySQL database on AWS RDS');
 });
 
-// 确保 videos 表存在
+// Ensure videos table exists
 const createVideosTable = `
 CREATE TABLE IF NOT EXISTS videos (
     id VARCHAR(255) PRIMARY KEY,
@@ -79,33 +79,33 @@ db.query(createVideosTable, (err) => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(cors({
-    origin: true, // 允许所有来源
-    credentials: true // 允许携带 Cookies
+    origin: true, // Allow all origins
+    credentials: true // Allow credentials (cookies)
 }));
 
-app.use(cookieParser()); // 使用 cookie-parser 中间件
+app.use(cookieParser()); // Use cookie-parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 设置会话管理
+// Session management
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your_secret_key',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        maxAge: 10 * 60 * 1000 // 10 分钟
+        maxAge: 10 * 60 * 1000 // 10 minutes
     }
 }));
 
-// 设置静态文件路径
+// Set static file path
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
-// 提供 index.html 页面
+// Serve index.html page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
 
-// 注册路由 (使用 Cognito)
+// Registration route (using Cognito)
 app.post('/register', async (req, res) => {
     const { username, password, email } = req.body;
     try {
@@ -119,7 +119,7 @@ app.post('/register', async (req, res) => {
         const signUpResponse = await cognitoClient.send(signUpCommand);
         console.log('User registered successfully:', signUpResponse);
 
-        // 为用户创建 S3 文件夹
+        // Create S3 folder for the user
         const params = {
             Bucket: process.env.AWS_S3_BUCKET,
             Key: `${username}/`
@@ -140,7 +140,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// 登录路由 (使用 Cognito)
+// Login route (using Cognito)
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -163,15 +163,12 @@ app.post('/login', async (req, res) => {
         const idToken = authResponse.AuthenticationResult.IdToken;
         const accessToken = authResponse.AuthenticationResult.AccessToken;
 
-        console.log("login cookie: ", idToken, accessToken);
+        console.log("Login successful. Setting cookies.");
 
-        // 设置 HttpOnly Cookies，前端无法通过 JavaScript 访问
-        res.cookie('idToken', idToken, {sameSite: 'lax', httpOnly: true, secure: false, path:'/' });
-        res.cookie('accessToken', accessToken, {sameSite: 'lax', httpOnly: true, secure: false , path:'/'});
+        // Set HttpOnly Cookies, inaccessible by JavaScript
+        res.cookie('idToken', idToken, { sameSite: 'lax', httpOnly: true, secure: false, path: '/' });
+        res.cookie('accessToken', accessToken, { sameSite: 'lax', httpOnly: true, secure: false, path: '/' });
 
-        console.log('Login successful:', authResponse);
-
-        // 返回成功响应
         res.status(200).json({ message: 'Login successful' });
     } catch (error) {
         console.error('Error logging in:', error);
@@ -179,20 +176,19 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// 注销路由
+// Logout route
 app.post('/logout', (req, res) => {
     res.clearCookie('idToken');
     res.clearCookie('accessToken');
     res.status(200).send('Logout successful');
 });
 
-// 获取当前用户信息的路由
+// Route to get current user info
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
-    console.log("?????????????????????")
     res.json({ username: req.session.user.username });
 });
 
-// 浏览指定用户的文件列表
+// Route to browse user files
 app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     const username = req.params.username;
 
@@ -216,7 +212,7 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
     });
 });
 
-// 删除指定用户文件
+// Route to delete a file
 app.delete('/deleteFile/:username/:folderName/:filename', ensureAuthenticated, (req, res) => {
     const { username, folderName, filename } = req.params;
 
@@ -235,7 +231,7 @@ app.delete('/deleteFile/:username/:folderName/:filename', ensureAuthenticated, (
     });
 });
 
-// 删除指定用户的整个文件夹
+// Route to delete a folder
 app.delete('/deleteFolder/:username/:folderName', ensureAuthenticated, (req, res) => {
     const { username, folderName } = req.params;
 
@@ -272,8 +268,8 @@ app.delete('/deleteFolder/:username/:folderName', ensureAuthenticated, (req, res
     });
 });
 
-// 视频转码函数
-const transcodingProgress = {}; // 全局进度记录
+// Function to handle video transcoding
+const transcodingProgress = {}; // Global progress tracking
 
 function transcodeVideo(inputPath, outputPath, resolution, username, resolutionIndex, s3Key) {
     return new Promise((resolve, reject) => {
@@ -307,16 +303,25 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
     });
 }
 
-// 上传并转码的路由
+// Upload and transcode route
 app.post('/upload', ensureAuthenticated, multer({ storage: multer.memoryStorage() }).single('video'), async (req, res) => {
     if (!req.file) return res.status(400).send({ msg: 'No file selected!' });
     const username = req.session.user.username;
     const originalFileName = path.parse(req.file.originalname).name;
     const videoFolder = `${username}/${originalFileName}/`;
     const tempFolder = path.join(os.tmpdir(), videoFolder);
+
+    // Ensure directory exists
     if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
     const tempFilePath = path.join(tempFolder, req.file.originalname);
     fs.writeFileSync(tempFilePath, req.file.buffer);
+
+    // Log the temporary file path for debugging
+    console.log('Temp file path:', tempFilePath);
+    if (!fs.existsSync(tempFilePath)) {
+        console.error('File does not exist after saving:', tempFilePath);
+        return res.status(500).send({ msg: 'Error saving file' });
+    }
 
     const outputFiles = [
         { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0, s3Key: `${username}/${originalFileName}/720p-${originalFileName}.mp4` },
@@ -334,7 +339,7 @@ app.post('/upload', ensureAuthenticated, multer({ storage: multer.memoryStorage(
     }
 });
 
-// 实时转码进度的路由
+// Real-time transcoding progress route
 app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
     const username = req.session.user.username;
     if (transcodingProgress[username]) {
@@ -345,13 +350,9 @@ app.get('/transcodingProgress', ensureAuthenticated, (req, res) => {
     }
 });
 
-// 确保用户已认证的中间件
+// Middleware to ensure the user is authenticated
 async function ensureAuthenticated(req, res, next) {
-    console.log("Ensuring auth...");
-    console.log("Cookies received:", req.cookies); // 打印所有的 Cookies
-
     const idToken = req.cookies.idToken;
-    console.log("ID Token:", idToken); // 打印 ID Token
 
     if (!idToken) {
         return res.status(401).json({ message: 'Unauthorized, please login.' });
@@ -360,7 +361,6 @@ async function ensureAuthenticated(req, res, next) {
     try {
         const payload = await verifier.verify(idToken);
         req.session.user = { username: payload["cognito:username"] };
-        console.log("Auth successful for user:", payload["cognito:username"]);
         next();
     } catch (error) {
         console.error('Invalid token:', error);
@@ -368,8 +368,7 @@ async function ensureAuthenticated(req, res, next) {
     }
 }
 
-
-// 启动服务器并监听 0.0.0.0
+// Start the server and listen on 0.0.0.0
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server started on port ${PORT}, listening on 0.0.0.0`);
 });
