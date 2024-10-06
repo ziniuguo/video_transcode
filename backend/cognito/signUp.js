@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const Cognito = require("@aws-sdk/client-cognito-identity-provider");
 const AWS = require('aws-sdk');
 const mysql = require('mysql2/promise');
@@ -17,11 +19,11 @@ const s3 = new AWS.S3({
 
 // MySQL (RDS) setup
 const dbConfig = {
-  host: process.env.DB_HOST,
+  host: process.env.DB_HOST,  // Make sure this is the correct RDS endpoint
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
+  port: process.env.DB_PORT || 3306,
   ssl: {
     ca: process.env.SSL_CERT_PATH,
     rejectUnauthorized: false,
