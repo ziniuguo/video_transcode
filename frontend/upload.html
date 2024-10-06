@@ -251,61 +251,64 @@
             }
         };
 
-        // 开始监控总的转码进度
-        function startTranscodingProgress() {
-            const progressElement = document.getElementById('uploadProgress');
-            const progressLabel = document.getElementById('progressLabel');
+        xhr.send(formData);
+    });
 
-            // 每秒请求一次转码进度
-            const intervalId = setInterval(() => {
-                fetch('http://13.211.82.62:3000/transcodingProgress', { credentials: 'include' })
-                    .then(response => response.json())
-                    .then(data => {
-                        const transcodingProgress = data.progress * 0.5; // 转码部分占50%
-                        const totalProgress = 50 + transcodingProgress; // 加上已完成的50%上传部分
-                        progressElement.value = totalProgress;
-                        progressLabel.textContent = `Transcoding... ${Math.round(totalProgress)}%`;
+    // 开始监控总的转码进度
+    function startTranscodingProgress() {
+        const progressElement = document.getElementById('uploadProgress');
+        const progressLabel = document.getElementById('progressLabel');
 
-                        if (totalProgress >= 100) {
-                            clearInterval(intervalId); // 停止请求
-                            document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
-                            progressElement.value = 100;
-                            progressLabel.textContent = 'Process complete!';
-                            loadFileList(); // 更新文件列表
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching transcoding progress:', error);
-                    });
-            }, 1000);  // 每秒请求一次
-        }
-
-        // 注销用户
-        document.getElementById('logoutButton').addEventListener('click', function () {
-            fetch('http://13.211.82.62:3000/logout', {
-                method: 'POST',
-                credentials: 'include'
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Logout failed');
-                    }
-                    return response.text();
-                })
+        // 每秒请求一次转码进度
+        const intervalId = setInterval(() => {
+            fetch('http://13.211.82.62:3000/transcodingProgress', { credentials: 'include' })
+                .then(response => response.json())
                 .then(data => {
-                    alert('Logged out successfully!');
-                    window.location.href = '/'; // 重定向到首页
+                    const transcodingProgress = data.progress * 0.5; // 转码部分占50%
+                    const totalProgress = 50 + transcodingProgress; // 加上已完成的50%上传部分
+                    progressElement.value = totalProgress;
+                    progressLabel.textContent = `Transcoding... ${Math.round(totalProgress)}%`;
+
+                    if (totalProgress >= 100) {
+                        clearInterval(intervalId); // 停止请求
+                        document.getElementById('uploadStatus').innerText = 'Transcoding complete!';
+                        progressElement.value = 100;
+                        progressLabel.textContent = 'Process complete!';
+                        loadFileList(); // 更新文件列表
+                    }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred while logging out: ' + error.message);
+                    console.error('Error fetching transcoding progress:', error);
                 });
-        });
+        }, 1000);  // 每秒请求一次
+    }
 
-        // 页面加载后获取用户名并加载文件列表
-        document.addEventListener('DOMContentLoaded', function() {
-            getSessionUsername();
-        });
+    // 注销用户
+    document.getElementById('logoutButton').addEventListener('click', function () {
+        fetch('http://13.211.82.62:3000/logout', {
+            method: 'POST',
+            credentials: 'include'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Logout failed');
+                }
+                return response.text();
+            })
+            .then(data => {
+                alert('Logged out successfully!');
+                window.location.href = '/'; // 重定向到首页
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while logging out: ' + error.message);
+            });
+    });
+
+    // 页面加载后获取用户名并加载文件列表
+    document.addEventListener('DOMContentLoaded', function() {
+        getSessionUsername();
+    }); // <-- Added missing closing part
 </script>
 </body>
 </html>
