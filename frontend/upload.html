@@ -114,59 +114,66 @@
                     const folderContentMap = {};
 
                     fileList.forEach(file => {
-                        // 从 Key 中提取文件夹的名字
+                        // 从 Key 中提取文件夹的名字和文件名
                         const keyParts = file.fileUrl.split('/');
-                        const folderName = keyParts[keyParts.length - 2]; // 倒数第二个部分为文件夹名
-                        const filename = file.filename;
+                        const folderName = keyParts[keyParts.length - 3]; // 用户根文件夹
+                        const subFolderName = keyParts[keyParts.length - 2]; // 转码后视频文件夹
+                        const filename = keyParts[keyParts.length - 1]; // 视频文件名
 
+                        // 先检查根文件夹
                         if (!folderContentMap[folderName]) {
-                            folderContentMap[folderName] = [];
+                            folderContentMap[folderName] = {};
                         }
-                        folderContentMap[folderName].push({
+
+                        // 检查子文件夹
+                        if (!folderContentMap[folderName][subFolderName]) {
+                            folderContentMap[folderName][subFolderName] = [];
+                        }
+
+                        // 添加文件到相应的子文件夹
+                        folderContentMap[folderName][subFolderName].push({
                             filename: filename,
                             fileUrl: file.fileUrl
                         });
                     });
 
                     Object.keys(folderContentMap).forEach(folderName => {
-                        const folderTitle = document.createElement('h4');
-                        folderTitle.classList.add('folder-header');
-                        folderTitle.textContent = folderName;
+                        const rootFolderTitle = document.createElement('h4');
+                        rootFolderTitle.textContent = folderName;
+                        fileLinksDiv.appendChild(rootFolderTitle);
 
-                        const deleteFolderButton = document.createElement('button');
-                        deleteFolderButton.textContent = 'Delete Folder';
-                        deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-sm', 'ml-2');
-                        deleteFolderButton.onclick = () => deleteFolder(folderName);
+                        const rootFolderDiv = document.createElement('div');
+                        rootFolderDiv.classList.add('folder-content');
 
-                        folderTitle.appendChild(deleteFolderButton);
-                        fileLinksDiv.appendChild(folderTitle);
+                        Object.keys(folderContentMap[folderName]).forEach(subFolderName => {
+                            const subFolderTitle = document.createElement('h5');
+                            subFolderTitle.textContent = subFolderName;
+                            rootFolderDiv.appendChild(subFolderTitle);
 
-                        const folderContentDiv = document.createElement('div');
-                        folderContentDiv.classList.add('folder-content');
+                            const subFolderDiv = document.createElement('div');
+                            subFolderDiv.classList.add('folder-content');
 
-                        folderContentMap[folderName].forEach(file => {
-                            const fileDiv = document.createElement('div');
+                            folderContentMap[folderName][subFolderName].forEach(file => {
+                                const fileDiv = document.createElement('div');
+                                const link = document.createElement('a');
+                                link.href = file.fileUrl;
+                                link.textContent = file.filename;
+                                link.target = '_blank';
 
-                            const link = document.createElement('a');
-                            link.href = file.fileUrl;
-                            link.textContent = file.filename;
-                            link.target = '_blank';
+                                const deleteButton = document.createElement('button');
+                                deleteButton.textContent = 'Delete Video';
+                                deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
+                                deleteButton.onclick = () => deleteVideo(folderName, subFolderName, file.filename);
 
-                            const deleteButton = document.createElement('button');
-                            deleteButton.textContent = 'Delete Video';
-                            deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
-                            deleteButton.onclick = () => deleteVideo(folderName, file.filename);
+                                fileDiv.appendChild(link);
+                                fileDiv.appendChild(deleteButton);
+                                subFolderDiv.appendChild(fileDiv);
+                            });
 
-                            fileDiv.appendChild(link);
-                            fileDiv.appendChild(deleteButton);
-                            folderContentDiv.appendChild(fileDiv);
+                            rootFolderDiv.appendChild(subFolderDiv);
                         });
 
-                        folderTitle.onclick = () => {
-                            folderContentDiv.style.display = folderContentDiv.style.display === 'none' ? 'block' : 'none';
-                        };
-
-                        fileLinksDiv.appendChild(folderContentDiv);
+                        fileLinksDiv.appendChild(rootFolderDiv);
                     });
                 }
             })
