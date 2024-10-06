@@ -186,6 +186,8 @@ app.post('/logout', (req, res) => {
 
 // 获取当前用户信息的路由
 app.get('/getUserInfo', ensureAuthenticated, (req, res) => {
+    console.log("?????????? " + req.cookies.idToken)
+    console.log("?????????? " + req.cookies)
     if (req.cookies.idToken) {
         res.json({ username: req.session.user.username });
     } else {
