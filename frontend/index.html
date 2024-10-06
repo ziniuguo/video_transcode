@@ -1,8 +1,6 @@
 <!doctype html>
-<html lang="en" data-bs-theme="auto">
+<html lang="en">
 <head>
-  <script src="/assets/js/color-modes.js"></script>
-
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="">
@@ -13,6 +11,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@docsearch/css@3">
   <link href="/assets/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="/sign-in.css" rel="stylesheet">
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.804.0.min.js"></script>
 </head>
 <body class="d-flex align-items-center py-4 bg-body-tertiary">
 <main class="form-signin w-100 m-auto">
@@ -53,13 +52,9 @@
   const clientId = "7rf6bdj8j4c8cptleaa8g26a1u"; // Replace with your Cognito Client ID
   const region = "ap-southeast-2";
 
-  // Import Cognito SDK
-  const CognitoIdentityProvider = require("@aws-sdk/client-cognito-identity-provider");
-
-  // Initialize Cognito client
-  const client = new CognitoIdentityProvider.CognitoIdentityProviderClient({
-    region: region,
-  });
+  // Initialize AWS Cognito
+  AWS.config.region = region; // Region
+  const cognitoIdentity = new AWS.CognitoIdentityServiceProvider();
 
   document.addEventListener('DOMContentLoaded', function () {
     const loginForm = document.getElementById('loginForm');
@@ -67,57 +62,60 @@
 
     // Handle login
     if (loginForm) {
-      loginForm.addEventListener('submit', async function (event) {
+      loginForm.addEventListener('submit', function (event) {
         event.preventDefault();
 
         const username = document.getElementById('floatingUsername').value;
         const password = document.getElementById('floatingPassword').value;
 
-        try {
-          // AWS Cognito login
-          const command = new CognitoIdentityProvider.InitiateAuthCommand({
-            AuthFlow: 'USER_PASSWORD_AUTH',
-            ClientId: clientId,
-            AuthParameters: {
-              USERNAME: username,
-              PASSWORD: password,
-            },
-          });
+        // AWS Cognito login
+        const authDetails = {
+          ClientId: clientId,
+          AuthFlow: 'USER_PASSWORD_AUTH',
+          AuthParameters: {
+            USERNAME: username,
+            PASSWORD: password,
+          },
+        };
 
-          const response = await client.send(command);
-
-          // If login is successful, redirect to upload page
-          alert('Login successful!');
-          window.location.href = 'upload.html';
-        } catch (error) {
-          alert('Login failed: ' + error.message);
-          console.error('Login error:', error);
-        }
+        cognitoIdentity.initiateAuth(authDetails, function(err, result) {
+          if (err) {
+            alert('Login failed: ' + err.message);
+            console.error('Login error:', err);
+          } else {
+            // Successful login
+            alert('Login successful!');
+            window.location.href = 'upload.html'; // Redirect to upload page
+          }
+        });
       });
     }
 
     // Handle registration
     if (registerBtn) {
-      registerBtn.addEventListener('click', async function () {
+      registerBtn.addEventListener('click', function () {
         const username = document.getElementById('floatingUsername').value;
         const password = document.getElementById('floatingPassword').value;
 
-        try {
-          // AWS Cognito registration
-          const command = new CognitoIdentityProvider.SignUpCommand({
-            ClientId: clientId,
-            Username: username,  // Username used instead of email
-            Password: password,
-            UserAttributes: [{ Name: "email", Value: "user@example.com" }],  // Replace with user's email
-          });
+        // AWS Cognito registration
+        const signUpDetails = {
+          ClientId: clientId,
+          Username: username,  // Username used instead of email
+          Password: password,
+          UserAttributes: [
+            { Name: "email", Value: "user@example.com" }  // Replace with user's email
+          ],
+        };
 
-          const response = await client.send(command);
-
-          alert('Registration successful!');
-        } catch (error) {
-          alert('Registration failed: ' + error.message);
-          console.error('Registration error:', error);
-        }
+        cognitoIdentity.signUp(signUpDetails, function(err, result) {
+          if (err) {
+            alert('Registration failed: ' + err.message);
+            console.error('Registration error:', err);
+          } else {
+            // Successful registration
+            alert('Registration successful!');
+          }
+        });
       });
     }
   });
