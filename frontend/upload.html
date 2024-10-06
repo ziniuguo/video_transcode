@@ -212,7 +212,6 @@
         }
     }
 
-    // 上传文件
     document.getElementById('uploadButton').addEventListener('click', function () {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
@@ -222,6 +221,34 @@
             return;
         }
 
+        // Step 1: Check if user folder exists and create it if it doesn't
+        checkOrCreateUserFolder(sessionUsername)
+            .then(() => {
+                // Step 2: Proceed with the file upload after folder check/creation
+                uploadFile(file);
+            })
+            .catch(error => {
+                console.error('Error checking/creating user folder:', error);
+                alert('An error occurred while setting up the folder: ' + error.message);
+            });
+    });
+
+    // Check or create user folder in S3
+    function checkOrCreateUserFolder(username) {
+        return fetch(`http://13.211.82.62:3000/checkOrCreateFolder/${encodeURIComponent(username)}`, {
+            method: 'POST',
+            credentials: 'include'  // Automatically send cookies for authentication
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to check/create folder');
+                }
+                return response.json();
+            });
+    }
+
+    // Upload file function
+    function uploadFile(file) {
         const formData = new FormData();
         formData.append('video', file);
 
@@ -253,7 +280,7 @@
         };
 
         xhr.send(formData);
-    });
+    }
 
     // 开始监控转码进度
     function startTranscodingProgress() {

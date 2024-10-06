@@ -303,6 +303,37 @@ function transcodeVideo(inputPath, outputPath, resolution, username, resolutionI
     });
 }
 
+// Route to check or create user folder in S3
+async function checkOrCreateUserFolder(username) {
+    const folderKey = `${username}/`;
+
+    const params = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: folderKey
+    };
+
+    try {
+        // Check if the folder exists by trying to retrieve its metadata
+        await s3.headObject(params).promise();
+        console.log(`Folder ${folderKey} already exists in S3.`);
+    } catch (err) {
+        if (err.code === 'NotFound') {
+            // If folder doesn't exist, create it
+            console.log(`Folder ${folderKey} not found. Creating it...`);
+            const createParams = {
+                Bucket: process.env.AWS_S3_BUCKET,
+                Key: folderKey,
+                Body: ''  // S3 creates folders by uploading an empty object with a key that ends with '/'
+            };
+            await s3.putObject(createParams).promise();
+            console.log(`Folder ${folderKey} created successfully in S3.`);
+        } else {
+            console.error('Error checking or creating folder:', err);
+            throw new Error('Error checking or creating folder in S3');
+        }
+    }
+}
+
 // Upload and transcode route
 app.post('/upload', ensureAuthenticated, multer({ storage: multer.memoryStorage() }).single('video'), async (req, res) => {
     if (!req.file) return res.status(400).send({ msg: 'No file selected!' });
@@ -311,30 +342,35 @@ app.post('/upload', ensureAuthenticated, multer({ storage: multer.memoryStorage(
     const videoFolder = `${username}/${originalFileName}/`;
     const tempFolder = path.join(os.tmpdir(), videoFolder);
 
-    // Ensure directory exists
-    if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
-    const tempFilePath = path.join(tempFolder, req.file.originalname);
-    fs.writeFileSync(tempFilePath, req.file.buffer);
-
-    // Log the temporary file path for debugging
-    console.log('Temp file path:', tempFilePath);
-    if (!fs.existsSync(tempFilePath)) {
-        console.error('File does not exist after saving:', tempFilePath);
-        return res.status(500).send({ msg: 'Error saving file' });
-    }
-
-    const outputFiles = [
-        { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0, s3Key: `${username}/${originalFileName}/720p-${originalFileName}.mp4` },
-        { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1, s3Key: `${username}/${originalFileName}/480p-${originalFileName}.mp4` },
-        { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2, s3Key: `${username}/${originalFileName}/360p-${originalFileName}.mp4` },
-        { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3, s3Key: `${username}/${originalFileName}/240p-${originalFileName}.mp4` }
-    ];
-
     try {
+        // Step 1: Check if the user's folder exists in S3, and create it if it doesn't
+        await checkOrCreateUserFolder(username);
+
+        // Step 2: Proceed with the file upload
+        // Ensure directory exists on the server for temporary storage
+        if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder, { recursive: true });
+        const tempFilePath = path.join(tempFolder, req.file.originalname);
+        fs.writeFileSync(tempFilePath, req.file.buffer);
+
+        console.log('Temp file path:', tempFilePath);
+        if (!fs.existsSync(tempFilePath)) {
+            console.error('File does not exist after saving:', tempFilePath);
+            return res.status(500).send({ msg: 'Error saving file' });
+        }
+
+        // Step 3: Transcode video and upload to S3
+        const outputFiles = [
+            { resolution: '1280x720', path: path.join(tempFolder, `720p-${originalFileName}.mp4`), index: 0, s3Key: `${username}/${originalFileName}/720p-${originalFileName}.mp4` },
+            { resolution: '854x480', path: path.join(tempFolder, `480p-${originalFileName}.mp4`), index: 1, s3Key: `${username}/${originalFileName}/480p-${originalFileName}.mp4` },
+            { resolution: '640x360', path: path.join(tempFolder, `360p-${originalFileName}.mp4`), index: 2, s3Key: `${username}/${originalFileName}/360p-${originalFileName}.mp4` },
+            { resolution: '426x240', path: path.join(tempFolder, `240p-${originalFileName}.mp4`), index: 3, s3Key: `${username}/${originalFileName}/240p-${originalFileName}.mp4` }
+        ];
+
         await Promise.all(outputFiles.map(output => transcodeVideo(tempFilePath, output.path, output.resolution, username, output.index, output.s3Key)));
+
         res.status(200).send({ msg: 'Files uploaded and transcoded successfully!' });
-    } catch (uploadError) {
-        console.error('Error during file processing:', uploadError);
+    } catch (error) {
+        console.error('Error during file processing:', error);
         res.status(500).send({ msg: 'Error during file processing' });
     }
 });
