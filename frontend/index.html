@@ -88,10 +88,15 @@
             alert('Login failed: ' + err.message);
             console.error('Login error:', err);
           } else {
+            // Check if the result contains AuthenticationResult
             if (result.AuthenticationResult) {
-              // Successful login, store tokens in cookies
               const idToken = result.AuthenticationResult.IdToken;
               const accessToken = result.AuthenticationResult.AccessToken;
+
+              // Log success and token details for debugging
+              console.log("Login successful. Tokens received:");
+              console.log("ID Token:", idToken);
+              console.log("Access Token:", accessToken);
 
               // Set tokens as cookies (use secure flags in production)
               document.cookie = `idToken=${idToken};path=/;SameSite=Lax;Secure`;
@@ -101,7 +106,7 @@
               window.location.href = 'upload.html'; // Redirect to upload page
             } else {
               console.error('Authentication result not found.');
-              alert('Authentication failed.');
+              alert('Authentication failed. Please ensure your email is confirmed or your credentials are correct.');
             }
           }
         });
