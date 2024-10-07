@@ -229,6 +229,7 @@ app.get('/browse/:username', ensureAuthenticated, (req, res) => {
             fileUrl: `https://${process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${file.Key}`
         }));
 
+        console.log("Sending files:", files); // 调试信息：检查发送的文件列表
         res.status(200).json(files);
     });
 });
