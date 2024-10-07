@@ -78,10 +78,17 @@ db.query(createVideosTable, (err) => {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.use(cors({
-    origin: true, // Allow all origins
+
+// CORS configuration
+const corsOptions = {
+    origin: process.env.FRONTEND_URL, // Define frontend URL in your .env file, e.g., http://localhost:3001
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // Allowed methods
     credentials: true // Allow credentials (cookies)
-}));
+};
+app.use(cors(corsOptions));
+
+// Support preflight/OPTIONS requests
+app.options('*', cors(corsOptions));
 
 app.use(cookieParser()); // Use cookie-parser middleware
 app.use(express.json());
