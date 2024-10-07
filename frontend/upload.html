@@ -113,35 +113,39 @@
                 } else {
                     const folderContentMap = {};
 
-                    // 解析返回的文件列表
+                    // 解析返回的文件列表，并根据路径构建文件夹层次结构
                     fileList.forEach(file => {
                         const keyParts = file.fileUrl.split('/');
-                        const folderName = keyParts[1]; // 子文件夹，例如转码后的文件夹
+                        const folderName = keyParts[1]; // 子文件夹
                         const filename = keyParts[keyParts.length - 1]; // 文件名
 
-                        // 如果文件夹还没存在于 map 中，初始化
                         if (!folderContentMap[folderName]) {
                             folderContentMap[folderName] = [];
                         }
 
-                        // 把文件加入到对应文件夹中
                         folderContentMap[folderName].push({
                             filename: filename,
                             fileUrl: file.fileUrl
                         });
                     });
 
-                    // 遍历 folderContentMap 并渲染文件夹和文件
+                    // 渲染文件夹和文件
                     Object.keys(folderContentMap).forEach(folderName => {
-                        const folderTitle = document.createElement('h4');
-                        folderTitle.textContent = folderName;
-                        fileLinksDiv.appendChild(folderTitle);
-
                         const folderDiv = document.createElement('div');
-                        folderDiv.classList.add('file-content');
+                        folderDiv.classList.add('folder');
 
+                        const folderHeader = document.createElement('h4');
+                        folderHeader.classList.add('folder-header');
+                        folderHeader.textContent = folderName;
+                        folderDiv.appendChild(folderHeader);
+
+                        const fileListDiv = document.createElement('div');
+                        fileListDiv.classList.add('folder-content'); // 默认为隐藏状态
+
+                        // 添加文件到文件夹
                         folderContentMap[folderName].forEach(file => {
                             const fileDiv = document.createElement('div');
+                            fileDiv.classList.add('file-item');
                             const link = document.createElement('a');
                             link.href = file.fileUrl;
                             link.textContent = file.filename;
@@ -154,10 +158,17 @@
 
                             fileDiv.appendChild(link);
                             fileDiv.appendChild(deleteButton);
-                            folderDiv.appendChild(fileDiv);
+                            fileListDiv.appendChild(fileDiv);
                         });
 
+                        folderDiv.appendChild(fileListDiv);
                         fileLinksDiv.appendChild(folderDiv);
+
+                        // 点击事件来展开/收起文件夹内容
+                        folderHeader.addEventListener('click', () => {
+                            const isVisible = fileListDiv.style.display === 'block';
+                            fileListDiv.style.display = isVisible ? 'none' : 'block';
+                        });
                     });
                 }
             })
