@@ -107,23 +107,23 @@
                 return response.json();
             })
             .then(fileList => {
-                console.log("Fetched file list:", fileList); // 打印获取到的文件列表
+                console.log("Fetched file list:", fileList);
 
                 if (fileList.length === 0) {
                     fileLinksDiv.innerHTML = '<p>No files uploaded yet.</p>';
                 } else {
                     const folderContentMap = {};
 
-                    // 按文件夹名解析
+                    // 解析文件列表，忽略用户名部分
                     fileList.forEach(file => {
-                        console.log(`Processing file: ${file.fileUrl}`); // 打印当前处理的文件
+                        console.log(`Processing file: ${file.fileUrl}`);
 
                         const keyParts = file.fileUrl.split('/');
-                        console.log("keyParts:", keyParts); // 打印 keyParts，检查路径解析是否正确
 
-                        // 只提取上传文件命名的文件夹 (去掉转码后的文件名部分)
-                        const folderName = keyParts[1]; // 上传的文件夹
-                        const filename = keyParts[keyParts.length - 1]; // 转码后的文件名
+                        // 忽略用户名文件夹部分，只提取后面的文件夹和文件名
+                        // keyParts[2] 开始是用户上传的文件夹（忽略 keyParts[1] 是用户名文件夹）
+                        const folderName = keyParts.slice(2, keyParts.length - 1).join('/');  // 文件夹路径
+                        const filename = keyParts[keyParts.length - 1];  // 文件名
 
                         if (!folderContentMap[folderName]) {
                             console.log(`Creating new folder entry for: ${folderName}`);
@@ -136,15 +136,16 @@
                         });
                     });
 
-                    console.log("Folder Content Map:", folderContentMap); // 打印完整的文件夹和文件的映射
+                    console.log("Folder Content Map:", folderContentMap);
 
+                    // 渲染文件夹和文件
                     Object.keys(folderContentMap).forEach(folderName => {
-                        console.log(`Rendering folder: ${folderName}`); // 打印当前渲染的文件夹
+                        console.log(`Rendering folder: ${folderName}`);
 
                         const folderDiv = document.createElement('div');
                         folderDiv.classList.add('folder');
 
-                        // Create a header for folder and add expand/collapse functionality
+                        // 创建文件夹头
                         const folderHeader = document.createElement('h4');
                         folderHeader.classList.add('folder-header');
                         folderHeader.textContent = folderName;
@@ -153,7 +154,7 @@
                             contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
                         };
 
-                        // Folder delete button
+                        // 文件夹删除按钮
                         const deleteFolderButton = document.createElement('button');
                         deleteFolderButton.textContent = 'Delete Folder';
                         deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-delete-folder');
@@ -168,8 +169,9 @@
                         const fileListDiv = document.createElement('div');
                         fileListDiv.classList.add('folder-content');
 
+                        // 渲染文件
                         folderContentMap[folderName].forEach(file => {
-                            console.log(`Rendering file: ${file.filename} in folder: ${folderName}`); // 打印当前渲染的文件
+                            console.log(`Rendering file: ${file.filename} in folder: ${folderName}`);
 
                             const fileDiv = document.createElement('div');
                             fileDiv.classList.add('file-item');
@@ -179,7 +181,7 @@
                             link.textContent = file.filename;
                             link.target = '_blank';
 
-                            // File delete button
+                            // 文件删除按钮
                             const deleteButton = document.createElement('button');
                             deleteButton.textContent = 'Delete Video';
                             deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
