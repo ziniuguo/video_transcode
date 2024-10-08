@@ -157,6 +157,11 @@
                                     contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
                                 };
 
+                                const deleteButton = document.createElement('button');
+                                deleteButton.textContent = 'Delete Folder';
+                                deleteButton.classList.add('btn', '.btn-danger', 'btn-sm', 'ml-2');
+                                deleteButton.onclick = () => deleteFolder(folderName);
+
                                 // 创建文件夹内容容器
                                 const folderContentContainer = document.createElement('div');
                                 folderContentContainer.style.display = 'none';  // 初始隐藏
