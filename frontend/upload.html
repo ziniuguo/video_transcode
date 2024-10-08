@@ -91,26 +91,41 @@
     }
 
     // Load files and organize them into folders and subfolders
+    // Load files and organize them into folders and subfolders
     function loadFileList() {
         const fileLinksDiv = document.getElementById('fileLinks');
         fileLinksDiv.innerHTML = '';
 
+        console.log(`Fetching file list for user: ${sessionUsername}`);
+
         fetch(`${apiUrl}/browse/${encodeURIComponent(sessionUsername)}`, {
             credentials: 'include'
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch files: ${response.statusText}`);
+                }
+                return response.json();
+            })
             .then(fileList => {
+                console.log("Fetched file list:", fileList); // 打印获取到的文件列表
+
                 if (fileList.length === 0) {
                     fileLinksDiv.innerHTML = '<p>No files uploaded yet.</p>';
                 } else {
                     const folderContentMap = {};
 
                     fileList.forEach(file => {
+                        console.log(`Processing file: ${file.fileUrl}`); // 打印当前处理的文件
+
                         const keyParts = file.fileUrl.split('/');
-                        const folderName = keyParts[1];
-                        const filename = keyParts[keyParts.length - 1];
+                        console.log("keyParts:", keyParts); // 打印 keyParts，检查路径解析是否正确
+
+                        const folderName = keyParts[1]; // 获取文件夹名
+                        const filename = keyParts[keyParts.length - 1]; // 获取文件名
 
                         if (!folderContentMap[folderName]) {
+                            console.log(`Creating new folder entry for: ${folderName}`);
                             folderContentMap[folderName] = [];
                         }
 
@@ -120,7 +135,11 @@
                         });
                     });
 
+                    console.log("Folder Content Map:", folderContentMap); // 打印完整的文件夹和文件的映射
+
                     Object.keys(folderContentMap).forEach(folderName => {
+                        console.log(`Rendering folder: ${folderName}`); // 打印当前渲染的文件夹
+
                         const folderDiv = document.createElement('div');
                         folderDiv.classList.add('folder');
 
@@ -137,7 +156,10 @@
                         const deleteFolderButton = document.createElement('button');
                         deleteFolderButton.textContent = 'Delete Folder';
                         deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-delete-folder');
-                        deleteFolderButton.onclick = () => deleteFolder(folderName);
+                        deleteFolderButton.onclick = () => {
+                            console.log(`Requesting to delete folder: ${folderName}`);
+                            deleteFolder(folderName);
+                        };
 
                         folderDiv.appendChild(folderHeader);
                         folderDiv.appendChild(deleteFolderButton);
@@ -146,8 +168,11 @@
                         fileListDiv.classList.add('folder-content');
 
                         folderContentMap[folderName].forEach(file => {
+                            console.log(`Rendering file: ${file.filename} in folder: ${folderName}`); // 打印当前渲染的文件
+
                             const fileDiv = document.createElement('div');
                             fileDiv.classList.add('file-item');
+
                             const link = document.createElement('a');
                             link.href = file.fileUrl;
                             link.textContent = file.filename;
@@ -157,7 +182,10 @@
                             const deleteButton = document.createElement('button');
                             deleteButton.textContent = 'Delete Video';
                             deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
-                            deleteButton.onclick = () => deleteVideo(folderName, file.filename);
+                            deleteButton.onclick = () => {
+                                console.log(`Requesting to delete file: ${file.filename} in folder: ${folderName}`);
+                                deleteVideo(folderName, file.filename);
+                            };
 
                             fileDiv.appendChild(link);
                             fileDiv.appendChild(deleteButton);
