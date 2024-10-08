@@ -6,9 +6,9 @@ const mysql = require('mysql2/promise');
 
 // Cognito and S3 configuration
 const clientId = "2olhmm2tshjpl097ncers3h5kq";  // Cognito Client ID
-const username = "Cc123456.";  // Replace with the desired username
-const password = "Cc123456.";  // Replace with a valid password that meets Cognito requirements
-const email = "Bb123456@example.com";  // Replace with the email address to receive the confirmation code
+const username = "Aa.123456";  // Replace with the desired username
+const password = "Aa.123456";  // Replace with a valid password that meets Cognito requirements
+const email = "123456@example.com";  // Replace with the email address to receive the confirmation code
 
 // AWS S3 setup
 const s3 = new AWS.S3({
