@@ -166,9 +166,8 @@
                                 const folderContentContainer = document.createElement('div');
                                 folderContentContainer.style.display = 'none';  // 初始隐藏
                                 folderDiv.appendChild(folderHeader);
-                                folderDiv.appendChild(deleteButton);
                                 folderDiv.appendChild(folderContentContainer);
-
+                                folderDiv.appendChild(deleteButton);
                                 parentDiv.appendChild(folderDiv);
                                 parentDiv = folderContentContainer;  // 下一级文件夹内容容器
                             } else {
