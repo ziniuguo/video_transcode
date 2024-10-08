@@ -91,7 +91,6 @@
     }
 
     // Load files and organize them into folders and subfolders
-    // Load files and organize them into folders and subfolders
     function loadFileList() {
         const fileLinksDiv = document.getElementById('fileLinks');
         fileLinksDiv.innerHTML = '';
@@ -115,14 +114,16 @@
                 } else {
                     const folderContentMap = {};
 
+                    // 按文件夹名解析
                     fileList.forEach(file => {
                         console.log(`Processing file: ${file.fileUrl}`); // 打印当前处理的文件
 
                         const keyParts = file.fileUrl.split('/');
                         console.log("keyParts:", keyParts); // 打印 keyParts，检查路径解析是否正确
 
-                        const folderName = keyParts[1]; // 获取文件夹名
-                        const filename = keyParts[keyParts.length - 1]; // 获取文件名
+                        // 只提取上传文件命名的文件夹 (去掉转码后的文件名部分)
+                        const folderName = keyParts[1]; // 上传的文件夹
+                        const filename = keyParts[keyParts.length - 1]; // 转码后的文件名
 
                         if (!folderContentMap[folderName]) {
                             console.log(`Creating new folder entry for: ${folderName}`);
