@@ -114,13 +114,12 @@
                 } else {
                     const folderContentMap = {};
 
-                    // 解析文件路径，确保子文件夹正确嵌套
+                    // 按文件夹名解析，确保子文件夹正确嵌套
                     fileList.forEach(file => {
                         console.log(`Processing file: ${file.fileUrl}`);
 
-                        // 使用 `/` 分割路径，并跳过用户名文件夹
                         const keyParts = file.fileUrl.split('/');
-                        const folderName = keyParts.slice(2, keyParts.length - 1).join('/');  // 获取所有子文件夹路径，从第二个索引开始去掉用户名
+                        const folderName = keyParts.slice(2, keyParts.length - 1).join('/');  // 获取文件夹路径
                         const filename = keyParts[keyParts.length - 1];  // 获取文件名
 
                         if (!folderContentMap[folderName]) {
@@ -158,25 +157,14 @@
                                     contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
                                 };
 
-                                // 添加删除按钮
-                                const deleteFolderButton = document.createElement('button');
-                                deleteFolderButton.textContent = 'Delete Folder';
-                                deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-delete-folder');
-                                deleteFolderButton.onclick = () => {
-                                    console.log(`Requesting to delete folder: ${currentFolderPath}`);
-                                    deleteFolder(currentFolderPath);
-                                };
-
-                                folderDiv.appendChild(folderHeader);
-                                folderDiv.appendChild(deleteFolderButton);
-
+                                // 创建文件夹内容容器
                                 const folderContentContainer = document.createElement('div');
-                                folderContentContainer.classList.add('folder-content');
                                 folderContentContainer.style.display = 'none';  // 初始隐藏
+                                folderDiv.appendChild(folderHeader);
                                 folderDiv.appendChild(folderContentContainer);
 
                                 parentDiv.appendChild(folderDiv);
-                                parentDiv = folderContentContainer;  // 更新 parentDiv 为当前文件夹的内容容器
+                                parentDiv = folderContentContainer;  // 下一级文件夹内容容器
                             } else {
                                 // 如果文件夹已经存在，则将其设为父容器
                                 parentDiv = existingFolderDiv.querySelector('div');
@@ -193,6 +181,7 @@
                             link.textContent = file.filename;
                             link.target = '_blank';
 
+                            // 文件删除按钮
                             const deleteButton = document.createElement('button');
                             deleteButton.textContent = 'Delete Video';
                             deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
