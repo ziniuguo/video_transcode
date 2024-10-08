@@ -121,7 +121,6 @@
                         const keyParts = file.fileUrl.split('/');
 
                         // 忽略用户名文件夹部分，只提取后面的文件夹和文件名
-                        // keyParts[2] 开始是用户上传的文件夹（忽略 keyParts[1] 是用户名文件夹）
                         const folderName = keyParts.slice(2, keyParts.length - 1).join('/');  // 文件夹路径
                         const filename = keyParts[keyParts.length - 1];  // 文件名
 
@@ -145,16 +144,20 @@
                         const folderDiv = document.createElement('div');
                         folderDiv.classList.add('folder');
 
-                        // 创建文件夹头
+                        // Create a header for folder and add expand/collapse functionality
                         const folderHeader = document.createElement('h4');
                         folderHeader.classList.add('folder-header');
                         folderHeader.textContent = folderName;
+
+                        // 创建一个 container 包裹所有文件及按钮
+                        const folderContentContainer = document.createElement('div');
+                        folderContentContainer.style.display = 'none';  // 初始隐藏
+
                         folderHeader.onclick = () => {
-                            const contentDiv = folderHeader.nextElementSibling;
-                            contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
+                            folderContentContainer.style.display = folderContentContainer.style.display === 'none' ? 'block' : 'none';
                         };
 
-                        // 文件夹删除按钮
+                        // Folder delete button
                         const deleteFolderButton = document.createElement('button');
                         deleteFolderButton.textContent = 'Delete Folder';
                         deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-delete-folder');
@@ -165,6 +168,7 @@
 
                         folderDiv.appendChild(folderHeader);
                         folderDiv.appendChild(deleteFolderButton);
+                        folderDiv.appendChild(folderContentContainer); // 添加内容容器
 
                         const fileListDiv = document.createElement('div');
                         fileListDiv.classList.add('folder-content');
@@ -181,7 +185,7 @@
                             link.textContent = file.filename;
                             link.target = '_blank';
 
-                            // 文件删除按钮
+                            // File delete button
                             const deleteButton = document.createElement('button');
                             deleteButton.textContent = 'Delete Video';
                             deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
@@ -195,7 +199,7 @@
                             fileListDiv.appendChild(fileDiv);
                         });
 
-                        folderDiv.appendChild(fileListDiv);
+                        folderContentContainer.appendChild(fileListDiv); // 将文件列表添加到 container 中
                         fileLinksDiv.appendChild(folderDiv);
                     });
                 }
