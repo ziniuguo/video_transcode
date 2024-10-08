@@ -119,7 +119,7 @@
                         console.log(`Processing file: ${file.fileUrl}`);
 
                         const keyParts = file.fileUrl.split('/');
-                        const folderName = keyParts.slice(2, keyParts.length - 1).join('/');  // 获取文件夹路径
+                        const folderName = keyParts.slice(1, keyParts.length - 1).join('/');  // 获取所有子文件夹路径
                         const filename = keyParts[keyParts.length - 1];  // 获取文件名
 
                         if (!folderContentMap[folderName]) {
@@ -170,6 +170,7 @@
                                 folderDiv.appendChild(deleteFolderButton);
 
                                 const folderContentContainer = document.createElement('div');
+                                folderContentContainer.classList.add('folder-content');  // 将内容 div 标记为 folder-content
                                 folderContentContainer.style.display = 'none';  // 初始隐藏
                                 folderDiv.appendChild(folderContentContainer);
 
