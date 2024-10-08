@@ -124,6 +124,7 @@
                         const folderDiv = document.createElement('div');
                         folderDiv.classList.add('folder');
 
+                        // Create a header for folder and add expand/collapse functionality
                         const folderHeader = document.createElement('h4');
                         folderHeader.classList.add('folder-header');
                         folderHeader.textContent = folderName;
@@ -132,6 +133,7 @@
                             contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
                         };
 
+                        // Folder delete button
                         const deleteFolderButton = document.createElement('button');
                         deleteFolderButton.textContent = 'Delete Folder';
                         deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-delete-folder');
@@ -151,6 +153,7 @@
                             link.textContent = file.filename;
                             link.target = '_blank';
 
+                            // File delete button
                             const deleteButton = document.createElement('button');
                             deleteButton.textContent = 'Delete Video';
                             deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
