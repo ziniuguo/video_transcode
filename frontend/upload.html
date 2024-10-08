@@ -157,17 +157,23 @@
                                     contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
                                 };
 
-                                const deleteButton = document.createElement('button');
-                                deleteButton.textContent = 'Delete Folder';
-                                deleteButton.classList.add('btn', '.btn-danger', 'btn-sm', 'ml-2');
-                                deleteButton.onclick = () => deleteFolder(folderName);
+                                // Folder delete button (为每个文件夹都添加删除按钮)
+                                const deleteFolderButton = document.createElement('button');
+                                deleteFolderButton.textContent = 'Delete Folder';
+                                deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-delete-folder');
+                                deleteFolderButton.onclick = () => {
+                                    console.log(`Requesting to delete folder: ${currentFolderPath}`);
+                                    deleteFolder(currentFolderPath);
+                                };
+
+                                folderDiv.appendChild(folderHeader);
+                                folderDiv.appendChild(deleteFolderButton);
 
                                 // 创建文件夹内容容器
                                 const folderContentContainer = document.createElement('div');
                                 folderContentContainer.style.display = 'none';  // 初始隐藏
-                                folderDiv.appendChild(folderHeader);
                                 folderDiv.appendChild(folderContentContainer);
-                                folderDiv.appendChild(deleteButton);
+
                                 parentDiv.appendChild(folderDiv);
                                 parentDiv = folderContentContainer;  // 下一级文件夹内容容器
                             } else {
