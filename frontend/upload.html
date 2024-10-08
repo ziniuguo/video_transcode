@@ -84,7 +84,6 @@
             })
             .then(data => {
                 sessionUsername = data.username;
-                console.log("Fetched session username:", sessionUsername);
                 loadFileList(); // Load file list after fetching username
             })
             .catch(error => {
@@ -130,8 +129,6 @@
                         });
                     });
 
-                    console.log("Organized folder content map:", folderContentMap);
-
                     // 渲染文件夹和文件
                     Object.keys(folderContentMap).forEach(folderName => {
                         const folderDiv = document.createElement('div');
@@ -170,12 +167,9 @@
                         // 点击事件来展开/收起文件夹内容
                         folderHeader.addEventListener('click', () => {
                             const isVisible = fileListDiv.style.display === 'block';
-                            console.log("Toggling visibility for:", folderName, isVisible);
                             fileListDiv.style.display = isVisible ? 'none' : 'block';
                         });
                     });
-
-                    console.log("Final file links content:", fileLinksDiv.innerHTML);
                 }
             })
             .catch(error => {
@@ -204,6 +198,25 @@
                 .catch(error => {
                     console.error('Error deleting file:', error);
                     alert('An error occurred while deleting the file: ' + error.message);
+                });
+        }
+    }
+
+    // Delete folder function
+    function deleteFolder(folderName) {
+        if (confirm('Are you sure you want to delete this folder?')) {
+            fetch(`${apiUrl}/deleteFolder/${encodeURIComponent(sessionUsername)}/${encodeURIComponent(folderName)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Folder deleted successfully!');
+                    loadFileList();  // Reload the file list after deletion
+                })
+                .catch(error => {
+                    console.error('Error deleting folder:', error);
+                    alert('An error occurred while deleting the folder: ' + error.message);
                 });
         }
     }
@@ -242,6 +255,90 @@
                 return response.json();
             });
     }
+
+    // Handle file upload
+    function uploadFile(file) {
+        const formData = new FormData();
+        formData.append('video', file);
+
+        const progressElement = document.getElementById('uploadProgress');
+        const progressLabel = document.getElementById('progressLabel');
+        progressElement.value = 0;
+        progressLabel.textContent = 'Uploading...';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${apiUrl}/upload`, true);
+        xhr.withCredentials = true;
+
+        xhr.upload.onprogress = function (event) {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressElement.value = percentComplete;
+                progressLabel.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+            }
+        };
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                progressElement.value = 100;
+                progressLabel.textContent = 'Upload complete! Starting transcoding...';
+                startTranscodingProgress();
+            } else {
+                progressLabel.textContent = 'Upload failed!';
+            }
+        };
+
+        xhr.send(formData);
+    }
+
+    // Monitor transcoding progress
+    function startTranscodingProgress() {
+        const progressElement = document.getElementById('transcodeProgress');
+        const progressLabel = document.getElementById('progressLabelTranscode');
+
+        const intervalId = setInterval(() => {
+            fetch(`${apiUrl}/transcodingProgress`, {
+                credentials: 'include'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const transcodingProgress = data.progress;
+                    progressElement.value = transcodingProgress;
+                    progressLabel.textContent = `Transcoding... ${Math.round(transcodingProgress)}%`;
+
+                    if (transcodingProgress >= 100) {
+                        clearInterval(intervalId);
+                        progressLabel.textContent = 'Transcoding complete!';
+                        loadFileList(); // Update file list after transcoding
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching transcoding progress:', error);
+                });
+        }, 1000);  // Poll every second
+    }
+
+    // Logout user
+    document.getElementById('logoutButton').addEventListener('click', function () {
+        fetch(`${apiUrl}/logout`, {
+            method: 'POST',
+            credentials: 'include'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Logout failed');
+                }
+                return response.text();
+            })
+            .then(data => {
+                alert('Logged out successfully!');
+                window.location.href = '/'; // Redirect to home
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while logging out: ' + error.message);
+            });
+    });
 
     // 页面加载时获取用户信息
     document.addEventListener('DOMContentLoaded', function() {
