@@ -114,18 +114,15 @@
                 } else {
                     const folderContentMap = {};
 
-                    // 解析文件列表，忽略用户名部分
+                    // 按文件夹名解析，确保子文件夹正确嵌套
                     fileList.forEach(file => {
                         console.log(`Processing file: ${file.fileUrl}`);
 
                         const keyParts = file.fileUrl.split('/');
-
-                        // 忽略用户名文件夹部分，只提取后面的文件夹和文件名
-                        const folderName = keyParts.slice(2, keyParts.length - 1).join('/');  // 文件夹路径
-                        const filename = keyParts[keyParts.length - 1];  // 文件名
+                        const folderName = keyParts.slice(2, keyParts.length - 1).join('/');  // 获取文件夹路径
+                        const filename = keyParts[keyParts.length - 1];  // 获取文件名
 
                         if (!folderContentMap[folderName]) {
-                            console.log(`Creating new folder entry for: ${folderName}`);
                             folderContentMap[folderName] = [];
                         }
 
@@ -137,46 +134,45 @@
 
                     console.log("Folder Content Map:", folderContentMap);
 
-                    // 渲染文件夹和文件
                     Object.keys(folderContentMap).forEach(folderName => {
-                        console.log(`Rendering folder: ${folderName}`);
+                        const folderHierarchy = folderName.split('/');  // 按层次拆分文件夹路径
+                        let parentDiv = fileLinksDiv;
 
-                        const folderDiv = document.createElement('div');
-                        folderDiv.classList.add('folder');
+                        // 为每一层创建对应的 `div` 并嵌套
+                        folderHierarchy.forEach((part, index) => {
+                            const currentFolderPath = folderHierarchy.slice(0, index + 1).join('/');
 
-                        // Create a header for folder and add expand/collapse functionality
-                        const folderHeader = document.createElement('h4');
-                        folderHeader.classList.add('folder-header');
-                        folderHeader.textContent = folderName;
+                            let existingFolderDiv = parentDiv.querySelector(`[data-folder-path="${currentFolderPath}"]`);
+                            if (!existingFolderDiv) {
+                                // 如果文件夹不存在，则创建新的
+                                const folderDiv = document.createElement('div');
+                                folderDiv.classList.add('folder');
+                                folderDiv.setAttribute('data-folder-path', currentFolderPath);
 
-                        // 创建一个 container 包裹所有文件及按钮
-                        const folderContentContainer = document.createElement('div');
-                        folderContentContainer.style.display = 'none';  // 初始隐藏
+                                const folderHeader = document.createElement('h4');
+                                folderHeader.classList.add('folder-header');
+                                folderHeader.textContent = part;
+                                folderHeader.onclick = () => {
+                                    const contentDiv = folderHeader.nextElementSibling;
+                                    contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
+                                };
 
-                        folderHeader.onclick = () => {
-                            folderContentContainer.style.display = folderContentContainer.style.display === 'none' ? 'block' : 'none';
-                        };
+                                // 创建文件夹内容容器
+                                const folderContentContainer = document.createElement('div');
+                                folderContentContainer.style.display = 'none';  // 初始隐藏
+                                folderDiv.appendChild(folderHeader);
+                                folderDiv.appendChild(folderContentContainer);
 
-                        // Folder delete button
-                        const deleteFolderButton = document.createElement('button');
-                        deleteFolderButton.textContent = 'Delete Folder';
-                        deleteFolderButton.classList.add('btn', 'btn-danger', 'btn-delete-folder');
-                        deleteFolderButton.onclick = () => {
-                            console.log(`Requesting to delete folder: ${folderName}`);
-                            deleteFolder(folderName);
-                        };
-
-                        folderDiv.appendChild(folderHeader);
-                        folderDiv.appendChild(deleteFolderButton);
-                        folderDiv.appendChild(folderContentContainer); // 添加内容容器
-
-                        const fileListDiv = document.createElement('div');
-                        fileListDiv.classList.add('folder-content');
+                                parentDiv.appendChild(folderDiv);
+                                parentDiv = folderContentContainer;  // 下一级文件夹内容容器
+                            } else {
+                                // 如果文件夹已经存在，则将其设为父容器
+                                parentDiv = existingFolderDiv.querySelector('div');
+                            }
+                        });
 
                         // 渲染文件
                         folderContentMap[folderName].forEach(file => {
-                            console.log(`Rendering file: ${file.filename} in folder: ${folderName}`);
-
                             const fileDiv = document.createElement('div');
                             fileDiv.classList.add('file-item');
 
@@ -185,22 +181,16 @@
                             link.textContent = file.filename;
                             link.target = '_blank';
 
-                            // File delete button
+                            // 文件删除按钮
                             const deleteButton = document.createElement('button');
                             deleteButton.textContent = 'Delete Video';
                             deleteButton.classList.add('btn', 'btn-warning', 'btn-sm', 'ml-2');
-                            deleteButton.onclick = () => {
-                                console.log(`Requesting to delete file: ${file.filename} in folder: ${folderName}`);
-                                deleteVideo(folderName, file.filename);
-                            };
+                            deleteButton.onclick = () => deleteVideo(folderName, file.filename);
 
                             fileDiv.appendChild(link);
                             fileDiv.appendChild(deleteButton);
-                            fileListDiv.appendChild(fileDiv);
+                            parentDiv.appendChild(fileDiv);  // 将文件添加到当前文件夹下
                         });
-
-                        folderContentContainer.appendChild(fileListDiv); // 将文件列表添加到 container 中
-                        fileLinksDiv.appendChild(folderDiv);
                     });
                 }
             })
